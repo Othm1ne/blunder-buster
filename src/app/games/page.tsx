@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import { playerExists, type TimeClass } from "@/lib/chesscom";
-import { isAnalyzed, type GameDoc } from "@/lib/analysis";
+import { isAnalyzed, type GameAnalysis, type GameDoc } from "@/lib/analysis";
+import { reviewGame } from "@/lib/classify";
+import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName } from "@/lib/describe";
 import { getProfile, listGames, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
 
 type Filter = "all" | TimeClass;
@@ -14,7 +16,7 @@ type Filter = "all" | TimeClass;
 /** "Analyze" button targets your most recent games. */
 const BATCH_GAMES = 50;
 /** Rough average, used only for the time estimate. */
-const SECONDS_PER_GAME = 20;
+const SECONDS_PER_GAME = 10;
 
 const RESULT_STYLE = {
   win: { label: "W", color: "var(--good)" },
@@ -224,42 +226,16 @@ export default function GamesPage() {
             </div>
           ) : (
             <ul className="flex flex-col gap-2">
-              {shown.map((g) => {
-                const r = RESULT_STYLE[g.result];
-                return (
-                  <li key={g.id} className="card flex items-center gap-3 !py-2">
-                    <span
-                      className="font-display grid size-9 shrink-0 place-items-center rounded-full text-white"
-                      style={{ background: r.color }}
-                    >
-                      {r.label}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-semibold">
-                        vs {g.oppName} <span className="text-[var(--muted)] font-normal">({g.oppRating})</span>
-                      </p>
-                      <p className="truncate text-xs text-[var(--muted)]">
-                        {g.opening} · {Math.ceil(g.moves.length / 2)} moves · {g.resultDetail}
-                      </p>
-                    </div>
-                    <div className="text-right text-xs text-[var(--muted)] shrink-0">
-                      <p>
-                        {g.myColor === "white" ? "♔" : "♚"} {g.myRating} · {formatTimeControl(g.timeControl)}
-                      </p>
-                      <p>{new Date(g.endTime).toLocaleDateString()}</p>
-                    </div>
-                    <AnalysisBadge
-                      done={done(g)}
-                      queued={queuedIds.has(g.id)}
-                      percent={current?.id === g.id ? (current.done / current.total) * 100 : undefined}
-                      onAnalyze={() => enqueue([g], { first: true })}
-                    />
-                    <a href={g.url} target="_blank" rel="noreferrer" className="text-xs underline shrink-0">
-                      chess.com
-                    </a>
-                  </li>
-                );
-              })}
+              {shown.map((g) => (
+                <GameRow
+                  key={g.id}
+                  game={g}
+                  analysis={g.analysis ?? results.get(g.id)}
+                  queued={queuedIds.has(g.id)}
+                  percent={current?.id === g.id ? (current.done / current.total) * 100 : undefined}
+                  onAnalyze={() => enqueue([g], { first: true })}
+                />
+              ))}
             </ul>
           )}
         </>
@@ -268,19 +244,112 @@ export default function GamesPage() {
   );
 }
 
-function AnalysisBadge({
-  done,
+function GameRow({
+  game: g,
+  analysis,
   queued,
   percent,
   onAnalyze,
 }: {
-  done: boolean;
+  game: GameDoc;
+  analysis?: GameAnalysis;
+  queued: boolean;
+  percent?: number;
+  onAnalyze: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const review = useMemo(
+    () => (analysis ? reviewGame(g.moves, analysis.evals, g.myColor, g.result, g.clocks) : null),
+    [analysis, g],
+  );
+  const r = RESULT_STYLE[g.result];
+  const mistakes = review?.moves.filter((m) => m.mine && (m.label === "blunder" || m.label === "mistake")) ?? [];
+  const chip = "shrink-0 rounded-full border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-semibold tabular-nums";
+
+  return (
+    <li className="card !py-2">
+      <div className="flex items-center gap-3">
+        <span className="font-display grid size-9 shrink-0 place-items-center rounded-full text-white" style={{ background: r.color }}>
+          {r.label}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-semibold">
+            vs {g.oppName} <span className="text-[var(--muted)] font-normal">({g.oppRating})</span>
+          </p>
+          <p className="truncate text-xs text-[var(--muted)]">
+            {g.opening} · {Math.ceil(g.moves.length / 2)} moves · {g.resultDetail}
+          </p>
+        </div>
+        <div className="hidden text-right text-xs text-[var(--muted)] shrink-0 sm:block">
+          <p>
+            {g.myColor === "white" ? "♔" : "♚"} {g.myRating} · {formatTimeControl(g.timeControl)}
+          </p>
+          <p>{new Date(g.endTime).toLocaleDateString()}</p>
+        </div>
+        {review ? (
+          <button onClick={() => setOpen(!open)} className="flex shrink-0 items-center gap-1" aria-expanded={open}>
+            <span className={chip} title="Your accuracy">
+              {Math.round(review.accuracy)}%
+            </span>
+            <span className={chip} style={{ color: LABEL_STYLE.blunder.color }} title="Blunders">
+              {review.counts.blunder}??
+            </span>
+            <span className={chip} style={{ color: LABEL_STYLE.mistake.color }} title="Mistakes">
+              {review.counts.mistake}?
+            </span>
+            <span className="text-xs">{open ? "▲" : "▼"}</span>
+          </button>
+        ) : (
+          <AnalysisBadge queued={queued} percent={percent} onAnalyze={onAnalyze} />
+        )}
+        <a href={g.url} target="_blank" rel="noreferrer" className="hidden text-xs underline shrink-0 sm:inline">
+          chess.com
+        </a>
+      </div>
+
+      {open && review && (
+        <div className="mt-3 border-t-2 border-dashed border-[var(--muted)] pt-3 text-sm">
+          {mistakes.length === 0 ? (
+            <p className="flex items-center gap-2">
+              <Mascot mood="proud" size={32} /> Clean game: no mistakes or blunders. Sir Blunderbuss is proud!
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {mistakes.map((m) => (
+                <li key={m.ply} className="flex gap-2">
+                  <span className="font-bold shrink-0" style={{ color: LABEL_STYLE[m.label].color }}>
+                    {moveName(m)}
+                    {LABEL_STYLE[m.label].symbol}
+                  </span>
+                  <span>
+                    {m.type && <strong>{MISTAKE_NAMES[m.type]}: </strong>}
+                    {explain(m)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {review.failedToConvert && (
+            <p className="mt-2 text-[var(--muted)]">
+              You were winning ({Math.round(review.peakWin)}% chances) but didn&apos;t win this one.
+            </p>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
+function AnalysisBadge({
+  queued,
+  percent,
+  onAnalyze,
+}: {
   queued: boolean;
   percent?: number;
   onAnalyze: () => void;
 }) {
   const base = "shrink-0 rounded-full border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-semibold";
-  if (done) return <span className={`${base} bg-[var(--good)] text-white`}>✓ analyzed</span>;
   if (percent !== undefined) return <span className={`${base} bg-[var(--gold)] tabular-nums`}>{Math.round(percent)}%</span>;
   if (queued) return <span className={`${base} text-[var(--muted)]`}>queued</span>;
   return (

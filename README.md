@@ -1,36 +1,17 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Blunder Buster
 
-## Getting Started
+A fun chess coach that imports your Chess.com games, finds your blunders with Stockfish, and turns them into puzzles.
+Task plan: https://claude.ai/artifact/Nk3VEkdQBLZX3MzXMRdTzQ · Read [NOTES.md](NOTES.md) before shipping anything.
 
-First, run the development server:
+## Stack ($0)
+Next.js (static export) · Firebase Spark (Auth + Firestore) · Cloudflare Pages (+ Pages Functions for Gemini)
+· Stockfish WASM · chess.js · react-chessboard · Chess.com public API · Gemini free tier
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## Local setup
+1. `npm install`
+2. Copy `.env.example` to `.env.local` and fill in the Firebase web config.
+3. `npm run dev` → http://localhost:3000
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Deploy (Cloudflare Pages)
+Connect the GitHub repo in Cloudflare Pages: build command `npm run build`, output directory `out`,
+and add the `NEXT_PUBLIC_FIREBASE_*` variables plus the `GEMINI_API_KEY` secret.

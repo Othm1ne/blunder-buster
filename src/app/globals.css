@@ -1,26 +1,76 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --paper: #fdf6e3;
+  --ink: #2b2118;
+  --wood: #e8b86d;
+  --wood-dark: #a86b32;
+  --gold: #ffcc33;
+  --good: #3fa34d;
+  --bad: #e5484d;
+  --muted: #7a6a58;
+  --card: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --paper: #1d1914;
+    --ink: #f4e9d8;
+    --wood: #8a5a2b;
+    --wood-dark: #5c3a1a;
+    --muted: #b3a28c;
+    --card: #2a241d;
   }
 }
 
+@theme inline {
+  --color-background: var(--paper);
+  --color-foreground: var(--ink);
+  --font-sans: var(--font-geist-sans);
+  --font-display: var(--font-fredoka);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.font-display {
+  font-family: var(--font-fredoka), var(--font-geist-sans), sans-serif;
+  font-weight: 700;
+}
+
+.card {
+  background: var(--card);
+  border: 3px solid var(--ink);
+  border-radius: 1rem;
+  box-shadow: 4px 4px 0 var(--ink);
+  padding: 1rem;
+}
+
+.btn-primary,
+.btn-secondary {
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-weight: 700;
+  box-shadow: 3px 3px 0 var(--ink);
+  transition: transform 0.05s;
+}
+.btn-primary {
+  background: var(--gold);
+  color: #2b2118;
+}
+.btn-secondary {
+  background: var(--card);
+  color: var(--ink);
+}
+.btn-primary:active,
+.btn-secondary:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink);
+}
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  opacity: 0.5;
 }

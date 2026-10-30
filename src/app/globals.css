@@ -48,6 +48,18 @@ body {
   padding: 1rem;
 }
 
+@keyframes progress-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.progress-indeterminate {
+  animation: progress-slide 1.1s ease-in-out infinite;
+}
+
 .btn-primary,
 .btn-secondary {
   border: 3px solid var(--ink);

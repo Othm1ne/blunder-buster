@@ -2,12 +2,19 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
-import { playerExists, type StoredGame, type TimeClass } from "@/lib/chesscom";
+import { playerExists, type TimeClass } from "@/lib/chesscom";
+import { isAnalyzed, type GameDoc } from "@/lib/analysis";
 import { getProfile, listGames, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
 
 type Filter = "all" | TimeClass;
+
+/** "Analyze" button targets your most recent games. */
+const BATCH_GAMES = 50;
+/** Rough average, used only for the time estimate. */
+const SECONDS_PER_GAME = 20;
 
 const RESULT_STYLE = {
   win: { label: "W", color: "var(--good)" },
@@ -23,13 +30,14 @@ function formatTimeControl(tc: string): string {
 export default function GamesPage() {
   const { user, loading } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [games, setGames] = useState<StoredGame[]>([]);
+  const [games, setGames] = useState<GameDoc[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
   const [status, setStatus] = useState<string | null>(null);
   const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  const analysis = useAnalysis();
 
   const load = useCallback(async (uid: string) => {
     const [p, g] = await Promise.all([getProfile(uid), listGames(uid)]);
@@ -105,6 +113,11 @@ export default function GamesPage() {
   const tally = { win: 0, loss: 0, draw: 0 };
   for (const g of shown) tally[g.result]++;
 
+  const { enqueue, cancel, queuedIds, current, results, run } = analysis;
+  const done = (g: GameDoc) => isAnalyzed(g) || results.has(g.id);
+  const pending = games.slice(0, BATCH_GAMES).filter((g) => !done(g));
+  const minutes = Math.max(1, Math.round((pending.length * SECONDS_PER_GAME) / 60));
+
   return (
     <div className="flex flex-col gap-5">
       <section className="card flex flex-wrap items-center gap-3">
@@ -144,6 +157,45 @@ export default function GamesPage() {
         {status && <p className="w-full text-sm">{status}</p>}
         {error && <p className="w-full text-sm text-[var(--bad)]">{error}</p>}
       </section>
+
+      {username && games.length > 0 && (
+        <section className="card flex flex-wrap items-center gap-3">
+          <Mascot mood={run ? "happy" : pending.length ? "shocked" : "proud"} size={56} />
+          {run ? (
+            <>
+              <div className="min-w-48 flex-1">
+                <ProgressBar
+                  percent={run.percent}
+                  label={`Analyzing game ${Math.min(run.finished + 1, run.total)}/${run.total}${
+                    current ? ` · position ${current.done}/${current.total}` : ""
+                  }`}
+                />
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  Keep this tab open. You can browse other pages meanwhile.
+                </p>
+              </div>
+              <button className="btn-secondary" onClick={cancel}>
+                Stop
+              </button>
+            </>
+          ) : pending.length ? (
+            <>
+              <p className="flex-1">
+                <strong>{pending.length}</strong> of your latest {Math.min(BATCH_GAMES, games.length)} games
+                haven&apos;t been checked for blunders yet.
+              </p>
+              <button className="btn-primary" onClick={() => enqueue(pending)}>
+                Analyze them (~{minutes} min)
+              </button>
+            </>
+          ) : (
+            <p className="flex-1">
+              All your latest {Math.min(BATCH_GAMES, games.length)} games are analyzed. Sir Blunderbuss is ready!
+            </p>
+          )}
+          {analysis.error && <p className="w-full text-sm text-[var(--bad)]">{analysis.error}</p>}
+        </section>
+      )}
 
       {username && (
         <>
@@ -196,6 +248,12 @@ export default function GamesPage() {
                       </p>
                       <p>{new Date(g.endTime).toLocaleDateString()}</p>
                     </div>
+                    <AnalysisBadge
+                      done={done(g)}
+                      queued={queuedIds.has(g.id)}
+                      percent={current?.id === g.id ? (current.done / current.total) * 100 : undefined}
+                      onAnalyze={() => enqueue([g], { first: true })}
+                    />
                     <a href={g.url} target="_blank" rel="noreferrer" className="text-xs underline shrink-0">
                       chess.com
                     </a>
@@ -207,5 +265,27 @@ export default function GamesPage() {
         </>
       )}
     </div>
+  );
+}
+
+function AnalysisBadge({
+  done,
+  queued,
+  percent,
+  onAnalyze,
+}: {
+  done: boolean;
+  queued: boolean;
+  percent?: number;
+  onAnalyze: () => void;
+}) {
+  const base = "shrink-0 rounded-full border-2 border-[var(--ink)] px-2 py-0.5 text-xs font-semibold";
+  if (done) return <span className={`${base} bg-[var(--good)] text-white`}>✓ analyzed</span>;
+  if (percent !== undefined) return <span className={`${base} bg-[var(--gold)] tabular-nums`}>{Math.round(percent)}%</span>;
+  if (queued) return <span className={`${base} text-[var(--muted)]`}>queued</span>;
+  return (
+    <button className={`${base} hover:bg-[var(--gold)]`} onClick={onAnalyze}>
+      Analyze
+    </button>
   );
 }

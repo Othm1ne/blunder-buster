@@ -3,6 +3,7 @@ import { Fredoka, Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { AppShell } from "@/components/AppShell";
+import { AnalysisProvider } from "@/components/AnalysisProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className={`${geistSans.variable} ${fredoka.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <AnalysisProvider>
+            <AppShell>{children}</AppShell>
+          </AnalysisProvider>
         </AuthProvider>
       </body>
     </html>

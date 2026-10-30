@@ -1,10 +1,11 @@
 import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc, writeBatch } from "firebase/firestore";
 import { db } from "./firebase";
 import { archiveLabel, fetchArchive, fetchArchiveUrls, toStoredGame, type StoredGame } from "./chesscom";
+import type { GameDoc } from "./analysis";
 
 // Firestore layout:
 //   users/{uid}               -> UserProfile
-//   users/{uid}/games/{id}    -> StoredGame (+ analysis fields added in M2/M3)
+//   users/{uid}/games/{id}    -> GameDoc (StoredGame from the import + `analysis` from Stockfish)
 
 export type UserProfile = {
   chessComUsername?: string;
@@ -32,9 +33,9 @@ export async function saveUsername(uid: string, username: string): Promise<void>
   await setDoc(userRef(uid), { chessComUsername: username.toLowerCase(), syncedArchives: [], latestEndTime: 0 }, { merge: true });
 }
 
-export async function listGames(uid: string, max = 300): Promise<StoredGame[]> {
+export async function listGames(uid: string, max = 300): Promise<GameDoc[]> {
   const snap = await getDocs(query(gamesCol(uid), orderBy("endTime", "desc"), limit(max)));
-  return snap.docs.map((d) => d.data() as StoredGame);
+  return snap.docs.map((d) => d.data() as GameDoc);
 }
 
 async function writeGames(uid: string, games: StoredGame[], onSaved: (saved: number) => void): Promise<void> {

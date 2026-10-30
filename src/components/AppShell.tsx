@@ -6,6 +6,8 @@ import type { ReactNode } from "react";
 import { useAuth } from "./AuthProvider";
 import { Mascot } from "./Mascot";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { useAnalysis } from "./AnalysisProvider";
+import { ProgressBar } from "./ProgressBar";
 
 const NAV = [
   { href: "/", label: "Today" },
@@ -17,6 +19,7 @@ const NAV = [
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, loading, signIn, logOut } = useAuth();
+  const { run } = useAnalysis();
 
   return (
     <div className="min-h-full flex flex-col">
@@ -54,6 +57,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      {run && pathname !== "/games" && (
+        <Link href="/games" className="block border-b-2 border-[var(--ink)] bg-[var(--card)]">
+          <div className="mx-auto max-w-5xl px-4 py-2">
+            <ProgressBar percent={run.percent} label={`Sir Blunderbuss is analyzing game ${Math.min(run.finished + 1, run.total)}/${run.total}…`} />
+          </div>
+        </Link>
+      )}
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6">{children}</main>
     </div>
   );

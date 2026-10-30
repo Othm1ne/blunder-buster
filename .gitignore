@@ -44,3 +44,6 @@ next-env.d.ts
 # cloudflare
 .wrangler
 .dev.vars
+
+# copied from node_modules by scripts/copy-stockfish.mjs
+/public/stockfish/

@@ -58,7 +58,7 @@ const LINES: Record<MistakeType | "inaccuracy" | "brilliant" | "great", string[]
   ],
 };
 
-const TIPS: Partial<Record<MistakeType | "time_trouble" | "failed_to_convert", string>> = {
+export const TIPS: Partial<Record<MistakeType | "time_trouble" | "failed_to_convert", string>> = {
   hung_piece: "Before each move, check every piece: is it defended, and can it be taken?",
   allowed_mate: "Before each move, look at all the checks your opponent could give.",
   missed_mate: "Start every move by looking at all your checks. One of them might be mate!",

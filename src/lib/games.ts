@@ -14,7 +14,24 @@ export type UserProfile = {
   /** endTime of the newest imported game, so the current month only writes new games. */
   latestEndTime?: number;
   lastSyncAt?: number;
+  /** Day-1 snapshot, so progress can be measured later (M6). */
+  baseline?: Baseline;
 };
+
+export type Baseline = {
+  createdAt: number;
+  /** Latest Chess.com ratings at the time (missing if no games of that type). */
+  rapidRating?: number;
+  blitzRating?: number;
+  blundersPerGame: number;
+  mistakesPerGame: number;
+  accuracy: number;
+  games: number;
+};
+
+export async function saveBaseline(uid: string, baseline: Baseline): Promise<void> {
+  await setDoc(userRef(uid), { baseline }, { merge: true });
+}
 
 /** How far back the first sync goes. */
 const MAX_MONTHS = 3;

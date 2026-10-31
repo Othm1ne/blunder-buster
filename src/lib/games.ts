@@ -33,6 +33,11 @@ export async function saveUsername(uid: string, username: string): Promise<void>
   await setDoc(userRef(uid), { chessComUsername: username.toLowerCase(), syncedArchives: [], latestEndTime: 0 }, { merge: true });
 }
 
+export async function getGame(uid: string, id: string): Promise<GameDoc | null> {
+  const snap = await getDoc(doc(gamesCol(uid), id));
+  return snap.exists() ? (snap.data() as GameDoc) : null;
+}
+
 export async function listGames(uid: string, max = 300): Promise<GameDoc[]> {
   const snap = await getDocs(query(gamesCol(uid), orderBy("endTime", "desc"), limit(max)));
   return snap.docs.map((d) => d.data() as GameDoc);

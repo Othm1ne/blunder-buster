@@ -8,3 +8,6 @@
 - **Gemini key** never goes in the frontend. Call it only through a Cloudflare Pages Function (`/functions`).
 - **Hosting** on Cloudflare Pages, not Vercel Hobby (Vercel's free plan forbids commercial use).
 - **Cost target: $0.** Firebase Spark plan only (no Cloud Functions, they need Blaze).
+- **Opening book** (`public/data/openings.json`) is generated from the Lichess opening list
+  (github.com/lichess-org/chess-openings), released as CC0 / public domain: free for commercial use.
+  Rebuild with `node scripts/build-openings.mjs`.

@@ -1,25 +1,41 @@
 @import "tailwindcss";
 
+/* Design tokens. Always pair a background token with its text token
+   (e.g. --gold with --on-gold) so text stays readable in both themes. */
 :root {
-  --paper: #fdf6e3;
-  --ink: #2b2118;
+  --paper: #fbf3e4; /* page background */
+  --card: #fffdf8;
+  --stripe: #f6ead3; /* zebra rows */
+  --ink: #2b2118; /* main text */
+  --muted: #7a6a58;
+  --line: #2b2118; /* borders */
+  --shadow: #2b2118;
+  --header: #e8b86d;
+  --on-header: #2b2118;
   --wood: #e8b86d;
   --wood-dark: #a86b32;
-  --gold: #ffcc33;
-  --good: #3fa34d;
-  --bad: #e5484d;
-  --muted: #7a6a58;
-  --card: #ffffff;
+  --gold: #ffc93c;
+  --on-gold: #2b2118;
+  --good: #2f9447;
+  --bad: #d93a3f;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #1d1914;
-    --ink: #f4e9d8;
+    --paper: #16120e;
+    --card: #221b15;
+    --stripe: #2a221a;
+    --ink: #f2e8d9;
+    --muted: #a8977f;
+    --line: #4d3e2f;
+    --shadow: #0a0806;
+    --header: #2b2119;
+    --on-header: #f2e8d9;
     --wood: #8a5a2b;
-    --wood-dark: #5c3a1a;
-    --muted: #b3a28c;
-    --card: #2a241d;
+    --wood-dark: #c98a4b;
+    --gold: #f7bd35;
+    --good: #3fa34d;
+    --bad: #e5484d;
   }
 }
 
@@ -42,10 +58,31 @@ body {
 
 .card {
   background: var(--card);
-  border: 3px solid var(--ink);
+  border: 2px solid var(--line);
   border-radius: 1rem;
-  box-shadow: 4px 4px 0 var(--ink);
+  box-shadow: 4px 4px 0 var(--shadow);
   padding: 1rem;
+}
+
+/* Small rounded label: accuracy, counts, statuses. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--line);
+  border-radius: 999px;
+  padding: 0.05rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--card);
+  color: var(--ink);
+}
+.chip-gold {
+  background: var(--gold);
+  border-color: var(--gold);
+  color: var(--on-gold);
 }
 
 @keyframes progress-slide {
@@ -62,16 +99,20 @@ body {
 
 .btn-primary,
 .btn-secondary {
-  border: 3px solid var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--line);
   border-radius: 999px;
   padding: 0.35rem 1rem;
   font-weight: 700;
-  box-shadow: 3px 3px 0 var(--ink);
+  box-shadow: 3px 3px 0 var(--shadow);
   transition: transform 0.05s;
 }
 .btn-primary {
   background: var(--gold);
-  color: #2b2118;
+  color: var(--on-gold);
+  border-color: var(--on-gold);
 }
 .btn-secondary {
   background: var(--card);
@@ -80,7 +121,7 @@ body {
 .btn-primary:active,
 .btn-secondary:active {
   transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--ink);
+  box-shadow: 1px 1px 0 var(--shadow);
 }
 .btn-primary:disabled,
 .btn-secondary:disabled {

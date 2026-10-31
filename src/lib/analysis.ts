@@ -7,7 +7,8 @@ import type { StoredGame } from "./chesscom";
 /** Bump ANALYSIS_VERSION when the settings change and old results should be redone. */
 export const ANALYSIS_DEPTH = 14;
 export const ANALYSIS_MAX_MS = 1000;
-export const ANALYSIS_VERSION = 1;
+// v2: MultiPV 2 (second-best score, for "Great" moves).
+export const ANALYSIS_VERSION = 2;
 
 export type GameAnalysis = {
   version: number;

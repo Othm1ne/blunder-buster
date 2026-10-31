@@ -23,11 +23,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-full flex flex-col">
-      <header className="border-b-4 border-[var(--ink)] bg-[var(--wood)]">
+      <header className="border-b-2 border-[var(--line)] bg-[var(--header)] text-[var(--on-header)]">
         <div className="mx-auto max-w-5xl px-4 py-3 flex flex-wrap items-center gap-3">
           <Link href="/" className="flex items-center gap-2">
             <Mascot size={40} />
-            <span className="font-display text-2xl text-[var(--ink)]">Blunder Buster</span>
+            <span className="font-display text-2xl">Blunder Buster</span>
           </Link>
           <nav className="flex flex-wrap gap-1 sm:ml-6">
             {NAV.map((item) => (
@@ -35,7 +35,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                  pathname === item.href ? "bg-[var(--ink)] text-[var(--paper)]" : "text-[var(--ink)] hover:bg-[var(--wood-dark)]/40"
+                  pathname === item.href ? "bg-[var(--gold)] text-[var(--on-gold)]" : "hover:bg-[var(--wood-dark)]/30"
                 }`}
               >
                 {item.label}
@@ -44,7 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </nav>
           <div className="ml-auto">
             {!isFirebaseConfigured ? (
-              <span className="text-xs text-[var(--ink)]">Firebase not configured</span>
+              <span className="text-xs">Firebase not configured</span>
             ) : loading ? null : user ? (
               <button onClick={logOut} className="btn-secondary">
                 Sign out
@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
       {run && pathname !== "/games" && (
-        <Link href="/games" className="block border-b-2 border-[var(--ink)] bg-[var(--card)]">
+        <Link href="/games" className="block border-b-2 border-[var(--line)] bg-[var(--card)]">
           <div className="mx-auto max-w-5xl px-4 py-2">
             <ProgressBar percent={run.percent} label={`Sir Blunderbuss is analyzing game ${Math.min(run.finished + 1, run.total)}/${run.total}…`} />
           </div>

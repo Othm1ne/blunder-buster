@@ -13,10 +13,14 @@ export const PIECE_NAMES: Record<PieceSymbol, string> = {
 };
 
 export const LABEL_STYLE: Record<MoveLabel, { name: string; symbol: string; color: string }> = {
-  best: { name: "Best", symbol: "★", color: "#3fa34d" },
-  good: { name: "Good", symbol: "✓", color: "#7bb661" },
-  inaccuracy: { name: "Inaccuracy", symbol: "?!", color: "#e6b422" },
-  mistake: { name: "Mistake", symbol: "?", color: "#e8862a" },
+  // Mid-tone colors chosen to stay readable on both the light and the dark card background.
+  brilliant: { name: "Brilliant", symbol: "!!", color: "#1fa8a0" },
+  great: { name: "Great", symbol: "!", color: "#5a8fd8" },
+  best: { name: "Best", symbol: "★", color: "#38a14e" },
+  book: { name: "Book", symbol: "📖", color: "#a8865c" },
+  good: { name: "Good", symbol: "✓", color: "#76a85a" },
+  inaccuracy: { name: "Inaccuracy", symbol: "?!", color: "#d29b0f" },
+  mistake: { name: "Mistake", symbol: "?", color: "#e47a24" },
   blunder: { name: "Blunder", symbol: "??", color: "#e5484d" },
 };
 

@@ -13,7 +13,7 @@ export function ProgressBar({ percent, label }: { percent?: number; label?: stri
           {known && <span className="font-bold tabular-nums">{value}%</span>}
         </div>
       )}
-      <div className="h-4 overflow-hidden rounded-full border-2 border-[var(--ink)] bg-[var(--paper)]">
+      <div className="h-4 overflow-hidden rounded-full border-2 border-[var(--line)] bg-[var(--paper)]">
         {known ? (
           <div className="h-full bg-[var(--gold)] transition-[width] duration-300" style={{ width: `${value}%` }} />
         ) : (

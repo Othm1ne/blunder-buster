@@ -3,7 +3,7 @@ export type MascotMood = "happy" | "shocked" | "proud";
 // Sir Blunderbuss: a cartoon knight head drawn in SVG so it costs nothing to host.
 export function Mascot({ mood = "happy", size = 96 }: { mood?: MascotMood; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={`Sir Blunderbuss looking ${mood}`}>
+    <svg width={size} height={size} viewBox="0 0 100 100" className="shrink-0" role="img" aria-label={`Sir Blunderbuss looking ${mood}`}>
       {/* base */}
       <rect x="22" y="82" width="56" height="12" rx="4" fill="var(--wood-dark)" />
       {/* head + mane */}

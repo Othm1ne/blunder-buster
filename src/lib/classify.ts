@@ -5,7 +5,7 @@ import type { EngineEval } from "./engine";
 // an accuracy score, and for your mistakes, *why* it was a mistake.
 // Pure functions, no I/O: cheap enough to recompute whenever a game is shown.
 
-export type MoveLabel = "best" | "good" | "inaccuracy" | "mistake" | "blunder";
+export type MoveLabel = "brilliant" | "great" | "best" | "book" | "good" | "inaccuracy" | "mistake" | "blunder";
 
 export type MistakeType =
   | "allowed_mate" // your move lets the opponent force mate
@@ -54,6 +54,10 @@ export type MoveReview = {
   type?: MistakeType;
   timeTrouble?: boolean;
   details?: MistakeDetails;
+  /** Brilliant moves: the piece given up. */
+  sacrificed?: PieceSymbol;
+  /** Great moves: how much worse (in winning chances) the second-best move was. */
+  onlyMoveGap?: number;
 };
 
 export type GameReview = {
@@ -66,6 +70,8 @@ export type GameReview = {
   failedToConvert: boolean;
   /** Your best winning chances during the game. */
   peakWin: number;
+  /** Most specific opening name from the book (when the book was loaded). */
+  opening?: string;
 };
 
 /** Win-chance drop (percentage points) at which a move gets each label (same scale as Lichess). */
@@ -76,7 +82,14 @@ const TIME_TROUBLE_SECONDS = 30;
 const PV_PLIES = 4;
 const MIN_MATERIAL = 2;
 const VALUES: Record<PieceSymbol, number> = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const LABEL_ORDER: MoveLabel[] = ["best", "good", "inaccuracy", "mistake", "blunder"];
+/** Best to worst. */
+export const LABEL_ORDER: MoveLabel[] = ["brilliant", "great", "best", "book", "good", "inaccuracy", "mistake", "blunder"];
+/** Brilliant: not already winning big before, and still clearly fine after. */
+const BRILLIANT_MAX_WIN = 90;
+const BRILLIANT_MIN_WIN = 50;
+/** Great: the second-best move is at least this many points worse, and you weren't already lost. */
+const GREAT_MIN_GAP = 20;
+const GREAT_MIN_WIN = 15;
 
 /** Winning chances for White (0-100) from a centipawn score. Same curve as Lichess. */
 export function winChance(cp: number): number {
@@ -205,17 +218,71 @@ function worse(a: MoveLabel, b: MoveLabel): MoveLabel {
   return LABEL_ORDER.indexOf(a) >= LABEL_ORDER.indexOf(b) ? a : b;
 }
 
+/** Position key used by the opening book: FEN without the move counters. */
+export function epd(fen: string): string {
+  return fen.split(" ").slice(0, 4).join(" ");
+}
+
+/**
+ * Pieces of `color` (knight or bigger) the opponent could win right now with a *legal* capture
+ * (so pinned attackers don't count): the piece is undefended, or a cheaper piece can take it.
+ */
+function hangingPieces(fen: string, color: Color): { square: Square; type: PieceSymbol }[] {
+  const opp: Color = color === "w" ? "b" : "w";
+  const chess = new Chess(fen);
+  if (chess.turn() !== opp) {
+    // Let the opponent "move" in our position to list their legal captures.
+    try {
+      if (chess.isCheck() || !chess.setTurn(opp)) return [];
+    } catch {
+      return [];
+    }
+  }
+  const cheapestCapturer = new Map<Square, number>();
+  for (const mv of chess.moves({ verbose: true })) {
+    if (!mv.captured || mv.captured === "p" || mv.captured === "k") continue;
+    cheapestCapturer.set(mv.to, Math.min(cheapestCapturer.get(mv.to) ?? 100, VALUES[mv.piece] || 100));
+  }
+  const hanging: { square: Square; type: PieceSymbol }[] = [];
+  for (const [square, cheapest] of cheapestCapturer) {
+    const piece = chess.get(square)!;
+    const defended = chess.attackers(square, color).length > 0;
+    if (!defended || cheapest < VALUES[piece.type]) hanging.push({ square, type: piece.type });
+  }
+  return hanging;
+}
+
+/**
+ * Did this move give up material on purpose? True only when nothing was in danger before
+ * (so it's a free choice, not damage control) and the move leaves a piece the opponent can win,
+ * worth at least 2 points more than what the move itself captured (so plain trades don't count).
+ */
+function sacrifice(m: MoveReview, captured: PieceSymbol | undefined): PieceSymbol | undefined {
+  if (hangingPieces(m.fenBefore, m.color).length > 0) return undefined;
+  const movedTo = m.uci.slice(2, 4);
+  const given = hangingPieces(m.fenAfter, m.color)
+    .map((p) => ({ ...p, net: VALUES[p.type] - (p.square === movedTo && captured ? VALUES[captured] : 0) }))
+    .filter((p) => p.net >= MIN_MATERIAL)
+    .sort((a, b) => VALUES[b.type] - VALUES[a.type]);
+  return given[0]?.type;
+}
+
+export type OpeningBook = Record<string, string>;
+
 export function reviewGame(
   moves: string[],
   evals: EngineEval[],
   myColor: "white" | "black",
   result: "win" | "loss" | "draw",
   clocks: number[] = [],
+  book?: OpeningBook | null,
 ): GameReview {
   const me: Color = myColor === "white" ? "w" : "b";
   const chess = new Chess();
   const reviewed: MoveReview[] = [];
   let peakWin = 50;
+  let inBook = !!book;
+  let opening: string | undefined;
 
   for (let i = 0; i < moves.length && i + 1 < evals.length; i++) {
     const fenBefore = chess.fen();
@@ -229,8 +296,18 @@ export function reviewGame(
     const winAfter = pov(after.cp);
     const drop = Math.max(0, winBefore - winAfter);
 
-    let label: MoveLabel =
-      drop >= THRESHOLDS.blunder
+    // Book: every move so far is known opening theory.
+    const bookName = inBook ? book?.[epd(fenAfter)] : undefined;
+    inBook = bookName !== undefined;
+    if (bookName) opening = bookName;
+
+    // Playing the engine's own top move is never a mistake: a "drop" there is just the engine
+    // seeing deeper one move later (horizon effect), not something you could have avoided.
+    let label: MoveLabel = inBook
+      ? "book"
+      : played.lan === before.best
+        ? "best"
+        : drop >= THRESHOLDS.blunder
         ? "blunder"
         : drop >= THRESHOLDS.mistake
           ? "mistake"
@@ -263,6 +340,29 @@ export function reviewGame(
       mateWinner(before) === color && Math.abs(before.mate ?? 99) <= 2 && mateWinner(after) !== color;
     if (missedShortMate) label = m.label = worse(label, "mistake");
 
+    if (!inBook && played.lan === before.best) {
+      // Brilliant: the engine's own top move, a real sacrifice, still good afterwards, and played
+      // when the game wasn't already decided, or forcing mate (Morphy's Qb8+ while already winning).
+      const forcesMate = mateWinner(after) === color && !played.san.endsWith("#");
+      const piece =
+        (winBefore < BRILLIANT_MAX_WIN || forcesMate) && winAfter >= BRILLIANT_MIN_WIN
+          ? sacrifice(m, played.captured)
+          : undefined;
+      if (piece) {
+        label = m.label = "brilliant";
+        m.sacrificed = piece;
+      } else if (played.lan === before.best && before.second && winBefore >= GREAT_MIN_WIN && !played.san.endsWith("#")) {
+        // Great: the only good move. The second-best move would have thrown away a lot.
+        const gap = winBefore - pov(before.second.cp);
+        const prev = reviewed.at(-1);
+        const recapture = prev?.uci.slice(2, 4) === played.to && new Chess(prev.fenBefore).get(played.to as Square) !== undefined;
+        if (gap >= GREAT_MIN_GAP && !recapture) {
+          label = m.label = "great";
+          m.onlyMoveGap = gap;
+        }
+      }
+    }
+
     if (m.mine) {
       peakWin = Math.max(peakWin, winAfter);
       if (label === "mistake" || label === "blunder") {
@@ -293,5 +393,6 @@ export function reviewGame(
     mistakeTypes,
     failedToConvert,
     peakWin,
+    opening,
   };
 }

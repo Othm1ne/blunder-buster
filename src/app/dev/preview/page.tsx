@@ -9,6 +9,8 @@ import { reviewGame } from "@/lib/classify";
 import sample from "@/dev/sampleGame.json";
 import { ProfileView } from "@/components/profile/ProfileView";
 import type { Profile } from "@/lib/profile";
+import { PuzzleBoard } from "@/components/puzzles/PuzzleBoard";
+import type { Puzzle } from "@/lib/puzzles";
 
 // Dev-only page: renders the main UI pieces with a sample game (no login needed),
 // so the design can be checked in light and dark mode. Open /dev/preview while running `npm run dev`.
@@ -39,10 +41,17 @@ const sampleProfile: Profile = {
   failedToConvert: 4,
   trend: Array.from({ length: 30 }, (_, i) => {
     const blunders = Math.max(0, Math.round(3.6 - i * 0.07 + Math.sin(i * 1.7) * 1.4));
-    return { gameId: "preview", endTime: Date.UTC(2026, 8, 1 + i * 2), oppName: `Player${i + 1}`, blunders, rolling: 3.4 - i * 0.06 };
+    return { gameId: `preview-${i}`, endTime: Date.UTC(2026, 8, 1 + i * 2), oppName: `Player${i + 1}`, blunders, rolling: 3.4 - i * 0.06 };
   }),
 };
 const sampleBaseline = { createdAt: Date.UTC(2026, 8, 1), rapidRating: 600, blitzRating: 530, blundersPerGame: 3.1, mistakesPerGame: 1.9, accuracy: 66, games: 30 };
+
+// "Missed mate" puzzle: after 1.e4 e5 2.Bc4 Nc6 3.Qh5 Nf6, White mates with Qxf7#.
+const samplePuzzle: Puzzle = {
+  id: "preview_7", gameId: "preview", ply: 7, fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
+  color: "w", theme: "mate", kind: "attack", solution: ["h5f7"], mateIn: 1, winBest: 99, label: "blunder",
+  played: "4. Qf3", oppName: "Knightmare", endTime: Date.UTC(2026, 9, 30),
+};
 
 export default function Preview() {
   if (process.env.NODE_ENV === "production") return <p>Not available.</p>;
@@ -72,6 +81,8 @@ export default function Preview() {
         <GameRow game={{ ...unanalyzed, id: "c", result: "draw" }} queued onAnalyze={noop} />
         <GameRow game={{ ...unanalyzed, id: "d" }} queued={false} onAnalyze={noop} />
       </ul>
+
+      <PuzzleBoard puzzle={samplePuzzle} onFinished={noop} onNext={noop} />
 
       <ProfileView profile={sampleProfile} baseline={sampleBaseline} onResetBaseline={noop} />
 

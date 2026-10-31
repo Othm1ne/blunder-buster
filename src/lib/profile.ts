@@ -8,7 +8,7 @@ import type { Baseline } from "./games";
 export type Phase = "opening" | "middlegame" | "endgame";
 type ProfileMistakeType = MistakeType;
 
-export type ReviewedGame = { game: GameDoc; review: GameReview };
+export type ReviewedGame = { game: GameDoc; analysis: GameAnalysis; review: GameReview };
 
 export type MistakeExample = { gameId: string; ply: number; move: MoveReview; oppName: string };
 
@@ -51,7 +51,7 @@ export function reviewAll(
   for (const game of games) {
     const analysis = game.analysis ?? extra.get(game.id);
     if (!analysis) continue;
-    out.push({ game, review: reviewGame(game.moves, analysis.evals, game.myColor, game.result, game.clocks, book) });
+    out.push({ game, analysis, review: reviewGame(game.moves, analysis.evals, game.myColor, game.result, game.clocks, book) });
   }
   return out;
 }

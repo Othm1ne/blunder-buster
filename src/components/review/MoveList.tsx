@@ -7,8 +7,15 @@ import { LABEL_STYLE } from "@/lib/describe";
 /** Two-column move list. Every move shows its label symbol; your moves are bold. */
 export function MoveList({ moves, ply, onSelect }: { moves: MoveReview[]; ply: number; onSelect: (ply: number) => void }) {
   const active = useRef<HTMLButtonElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  // Keep the current move visible by scrolling the list only (scrollIntoView would scroll the whole page).
   useEffect(() => {
-    active.current?.scrollIntoView({ block: "nearest" });
+    const box = list.current;
+    const el = active.current;
+    if (!box || !el) return;
+    const top = el.offsetTop; // relative to the list, which is `relative` (the offsetParent)
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (top + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + el.offsetHeight - box.clientHeight;
   }, [ply]);
 
   const rows: [MoveReview, MoveReview | undefined][] = [];
@@ -42,7 +49,7 @@ export function MoveList({ moves, ply, onSelect }: { moves: MoveReview[]; ply: n
   };
 
   return (
-    <div className="max-h-72 overflow-y-auto rounded-xl border-2 border-[var(--line)] bg-[var(--card)] text-sm lg:max-h-[420px]">
+    <div ref={list} className="relative max-h-72 overflow-y-auto rounded-xl border-2 border-[var(--line)] bg-[var(--card)] text-sm lg:max-h-[420px]">
       <div className="grid grid-cols-[2.5rem_1fr_1fr]">
         {rows.map(([w, b], i) => {
           const striped = i % 2 === 1;

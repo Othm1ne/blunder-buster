@@ -3,6 +3,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { getEngine, type EngineEval } from "./engine";
 import type { StoredGame } from "./chesscom";
+import type { GameCoach } from "./coach";
 
 /** Bump ANALYSIS_VERSION when the settings change and old results should be redone. */
 export const ANALYSIS_DEPTH = 14;
@@ -19,7 +20,7 @@ export type GameAnalysis = {
   analyzedAt: number;
 };
 
-export type GameDoc = StoredGame & { analysis?: GameAnalysis };
+export type GameDoc = StoredGame & { analysis?: GameAnalysis; coach?: GameCoach };
 
 export function isAnalyzed(game: GameDoc): boolean {
   return (game.analysis?.version ?? 0) >= ANALYSIS_VERSION;

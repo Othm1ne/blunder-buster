@@ -1,0 +1,4 @@
+# Copy to .dev.vars (git-ignored) for `npm run dev:api`. In production, set these in
+# Cloudflare Pages > Settings > Variables and Secrets (GEMINI_API_KEY as a *secret*).
+GEMINI_API_KEY=
+FIREBASE_PROJECT_ID=blunder-buster-7d926

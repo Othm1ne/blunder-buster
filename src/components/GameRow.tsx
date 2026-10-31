@@ -7,6 +7,7 @@ import type { GameAnalysis, GameDoc } from "@/lib/analysis";
 import { reviewGame } from "@/lib/classify";
 import { useOpeningBook } from "@/lib/openings";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName } from "@/lib/describe";
+import { mascotLine } from "@/lib/templates";
 
 const RESULT_STYLE = {
   win: { label: "W", color: "#2f9447" },
@@ -118,7 +119,9 @@ export function GameRow({
                   </Link>
                   <span>
                     {m.type && <strong>{MISTAKE_NAMES[m.type]}: </strong>}
-                    {explain(m)}
+                    {g.coach?.analyzedAt === analysis?.analyzedAt && g.coach?.moves[String(m.ply)]
+                      ? g.coach.moves[String(m.ply)]
+                      : (mascotLine(m, g.id) ?? explain(m))}
                   </span>
                 </li>
               ))}

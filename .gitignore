@@ -47,3 +47,4 @@ next-env.d.ts
 
 # copied from node_modules by scripts/copy-stockfish.mjs
 /public/stockfish/
+!.dev.vars.example

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Chess, type Square } from "chess.js";
 import { Chessboard, type Arrow } from "react-chessboard";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,6 +14,8 @@ import { epd, reviewGame, winChance, type MoveReview } from "@/lib/classify";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName, PIECE_NAMES } from "@/lib/describe";
 import { getEngine } from "@/lib/engine";
 import { useOpeningBook } from "@/lib/openings";
+import { isCoachFresh, requestCoach, type GameCoach } from "@/lib/coach";
+import { mascotLine, templateVerdict } from "@/lib/templates";
 import { EvalBar } from "./EvalBar";
 import { EvalGraph } from "./EvalGraph";
 import { MoveList } from "./MoveList";
@@ -96,6 +98,31 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
     [game, analysis, book],
   );
   const total = review.moves.length;
+
+  // AI coach: asked once per game (then cached on the game). Templates show until it answers or if it fails.
+  const { user } = useAuth();
+  const fresh = isCoachFresh(game, analysis.analyzedAt);
+  const [coach, setCoach] = useState<GameCoach | null>(fresh ? game.coach! : null);
+  const [coachState, setCoachState] = useState<"ready" | "loading" | "error">(fresh || !user ? "ready" : "loading");
+  const [coachError, setCoachError] = useState<string | null>(null);
+  const askCoach = useCallback(() => {
+    if (!user) return;
+    requestCoach(user, game, review, analysis.analyzedAt)
+      .then((c) => {
+        setCoach(c);
+        setCoachState("ready");
+      })
+      .catch((e) => {
+        setCoachError(e instanceof Error ? e.message : String(e));
+        setCoachState("error");
+      });
+  }, [user, game, review, analysis.analyzedAt]);
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || fresh || !user) return;
+    asked.current = true;
+    askCoach();
+  }, [fresh, user, askCoach]);
 
   const goTo = useCallback(
     (p: number) => {
@@ -265,7 +292,21 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
         </div>
 
         <div className="flex flex-col gap-3">
+          <CoachCard
+            coach={coach}
+            fallback={templateVerdict(review, game.result)}
+            state={coachState}
+            error={coachError}
+            canAsk={!!user}
+            onRetry={() => {
+              setCoachState("loading");
+              setCoachError(null);
+              askCoach();
+            }}
+          />
           <MovePanel
+            seed={game.id}
+            coachText={move ? coach?.moves[String(move.ply)] : undefined}
             bookName={move && move.label === "book" ? book?.[epd(move.fenAfter)] : undefined}
             move={move}
             retry={retry}
@@ -286,7 +327,48 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
   );
 }
 
+function CoachCard({
+  coach,
+  fallback,
+  state,
+  error,
+  canAsk,
+  onRetry,
+}: {
+  coach: GameCoach | null;
+  fallback: { summary: string; tip: string };
+  state: "ready" | "loading" | "error";
+  error: string | null;
+  canAsk: boolean;
+  onRetry: () => void;
+}) {
+  const { summary, tip } = coach ?? fallback;
+  return (
+    <div className="card flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <p className="font-display text-lg">Sir Blunderbuss&apos;s verdict</p>
+        <span className={`chip ml-auto ${coach ? "chip-gold" : "text-[var(--muted)]"}`}>{coach ? "✨ AI coach" : "Quick take"}</span>
+      </div>
+      <p className="text-sm">{summary}</p>
+      <p className="rounded-lg bg-[var(--stripe)] px-3 py-2 text-sm">
+        <strong>Tip for next game:</strong> {tip}
+      </p>
+      {state === "loading" && <ProgressBar label="The AI coach is reading your game…" />}
+      {state === "error" && canAsk && (
+        <p className="flex flex-wrap items-center gap-2 text-xs text-[var(--muted)]">
+          AI coach unavailable ({error}). Showing the quick take.
+          <button className="underline" onClick={onRetry}>
+            Try again
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
+
 function MovePanel({
+  seed,
+  coachText,
   bookName,
   move,
   retry,
@@ -295,6 +377,8 @@ function MovePanel({
   onRetry,
   onExitRetry,
 }: {
+  seed: string;
+  coachText?: string;
   bookName?: string;
   move: MoveReview | null;
   retry: Retry | null;
@@ -334,8 +418,11 @@ function MovePanel({
   const canRetry = move.mine && isFlagged(move);
   const hasBetter = !!move.bestUci && !["best", "great", "brilliant"].includes(move.label);
   const mood: MascotMood = move.label === "blunder" ? "shocked" : move.label === "best" ? "proud" : "happy";
+  // Your moves: the AI coach's words if we have them, else Sir Blunderbuss's templates.
+  const coachLine = move.mine ? (coachText ?? mascotLine(move, seed)) : null;
   let text: string;
-  if (move.label === "book") text = `Book move: known opening theory${bookName ? ` (${bookName})` : ""}.`;
+  if (coachLine) text = coachLine;
+  else if (move.label === "book") text = `Book move: known opening theory${bookName ? ` (${bookName})` : ""}.`;
   else if (move.label === "brilliant")
     text = move.mine
       ? `Brilliant! You gave up your ${PIECE_NAMES[move.sacrificed ?? "p"]} and it works. That's real chess courage.`
@@ -370,7 +457,10 @@ function MovePanel({
           </span>
         )}
       </div>
-      <p className="text-sm">{text}</p>
+      <p className="text-sm">
+        {text}
+        {move.mine && coachText && <span className="ml-1 text-xs text-[var(--muted)]">✨</span>}
+      </p>
       {(canRetry || hasBetter) && (
         <div className="flex flex-wrap gap-2">
           {canRetry && (

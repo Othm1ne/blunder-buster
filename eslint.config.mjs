@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Prebuilt Stockfish engine copied from node_modules.
     "public/stockfish/**",
+    // Local Cloudflare (wrangler) build output.
+    ".wrangler/**",
   ]),
 ]);
 

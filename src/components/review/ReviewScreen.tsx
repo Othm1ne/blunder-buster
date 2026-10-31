@@ -16,6 +16,7 @@ import { getEngine } from "@/lib/engine";
 import { useOpeningBook } from "@/lib/openings";
 import { isCoachFresh, requestCoach, type GameCoach } from "@/lib/coach";
 import { mascotLine, templateVerdict } from "@/lib/templates";
+import { markReviewed, recordActivity } from "@/lib/progress";
 import { EvalBar } from "./EvalBar";
 import { EvalGraph } from "./EvalGraph";
 import { MoveList } from "./MoveList";
@@ -117,6 +118,15 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
         setCoachState("error");
       });
   }, [user, game, review, analysis.analyzedAt]);
+  // Opening a review counts as training (streak) and, the first time, as a review (XP, badge, mission).
+  const recorded = useRef(false);
+  useEffect(() => {
+    if (!user || recorded.current) return;
+    recorded.current = true;
+    recordActivity(user.uid).catch(() => undefined);
+    if (!game.reviewedAt) markReviewed(user.uid, game.id).catch(() => undefined);
+  }, [user, game]);
+
   const asked = useRef(false);
   useEffect(() => {
     if (asked.current || fresh || !user) return;

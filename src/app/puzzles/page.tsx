@@ -11,6 +11,7 @@ import type { GameDoc } from "@/lib/analysis";
 import { listGames } from "@/lib/games";
 import { useOpeningBook } from "@/lib/openings";
 import { reviewAll } from "@/lib/profile";
+import { recordActivity } from "@/lib/progress";
 import {
   buildPuzzles,
   loadPuzzleStates,
@@ -74,6 +75,7 @@ export default function PuzzlesPage() {
     // Fire and forget: progress is also kept in memory for this session.
     savePuzzleState(user.uid, current.id, state).catch(() => undefined);
     saveWarmup(user.uid, done).catch(() => undefined);
+    recordActivity(user.uid, { warmupDone: done === WARMUP_SIZE }).catch(() => undefined);
   }
 
   function onNext() {

@@ -20,7 +20,7 @@ export type GameAnalysis = {
   analyzedAt: number;
 };
 
-export type GameDoc = StoredGame & { analysis?: GameAnalysis; coach?: GameCoach };
+export type GameDoc = StoredGame & { analysis?: GameAnalysis; coach?: GameCoach; reviewedAt?: number };
 
 export function isAnalyzed(game: GameDoc): boolean {
   return (game.analysis?.version ?? 0) >= ANALYSIS_VERSION;

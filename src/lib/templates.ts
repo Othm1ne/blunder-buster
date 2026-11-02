@@ -26,6 +26,16 @@ const LINES: Record<MistakeType | "inaccuracy" | "brilliant" | "great", string[]
     "Fork! {threat} hits two of your pieces at the same time, and you can only save one. Keep your king and queen off the same knight jump.",
     "Your opponent's {by} forks {targets} with {threat}. Before moving, check where their pieces can jump next.",
   ],
+  pin: [
+    "{threat} pins your {piece} to your {behind}. A pinned piece can't run, so it gets lost. Keep valuable pieces off the same line!",
+    "Pinned! After {threat}, your {piece} is stuck in front of your {behind}. {best} kept your pieces off that line.",
+    "Watch the long lines: {threat} nails your {piece} to your {behind}, and you lose about {material} points.",
+  ],
+  skewer: [
+    "Skewer! {threat} hits your {piece}, and when it moves away your {behind} behind it falls. Don't line up your big pieces!",
+    "{threat} attacks your {piece} with your {behind} hiding behind it. One has to go. {best} avoided the trap.",
+    "Your {piece} and {behind} were lined up, and {threat} skewers them. Check the lines of their bishops, rooks and queen!",
+  ],
   missed_material: [
     "Free {piece} on {square}! Your opponent left it hanging. {best} grabs it. After each of their moves, ask: did they leave something unprotected?",
     "Treasure missed! {best} wins a {piece} for free. Always look for loose pieces first.",
@@ -63,6 +73,8 @@ export const TIPS: Partial<Record<MistakeType | "time_trouble" | "failed_to_conv
   allowed_mate: "Before each move, look at all the checks your opponent could give.",
   missed_mate: "Start every move by looking at all your checks. One of them might be mate!",
   fork: "Watch for enemy knight jumps that could hit two of your pieces at once.",
+  pin: "Don't park a piece in front of your king or queen on an open line: it can get pinned.",
+  skewer: "Keep your king, queen and rooks off the same line as an enemy bishop, rook or queen.",
   missed_material: "After your opponent moves, ask: did they leave anything hanging?",
   tactic: "Ask what your opponent's last move threatens before you make yours.",
   time_trouble: "Spend less time on easy moves early, so you have time when it gets sharp.",
@@ -87,6 +99,7 @@ function fill(line: string, m: MoveReview): string | null {
     mateIn: d.mateIn?.toString(),
     material: d.material?.toString(),
     targets: d.targets?.join(" and "),
+    behind: d.behind && PIECE_NAMES[d.behind],
     sacrificed: m.sacrificed && PIECE_NAMES[m.sacrificed],
   };
   let missing = false;

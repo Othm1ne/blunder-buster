@@ -1,6 +1,7 @@
 import type { GameDoc, GameAnalysis } from "./analysis";
 import { reviewGame, type GameReview, type MistakeType, type MoveReview, type OpeningBook } from "./classify";
 import type { Baseline } from "./games";
+import { habitStats, tiltStats, timeStats, type HabitStats, type TiltStats, type TimeStats } from "./insights";
 
 // Turns many reviewed games into the Blunder Profile: averages, your most common mistake
 // types (with examples), when in the game you blunder, and the trend over time.
@@ -25,6 +26,11 @@ export type Profile = {
   failedToConvert: number;
   /** Oldest first. `rolling` = average blunders over the last ROLLING games. */
   trend: { gameId: string; endTime: number; oppName: string; blunders: number; rolling: number }[];
+  habits: HabitStats[];
+  /** Null when no game has clock data. */
+  time: TimeStats | null;
+  /** Null until there are enough games after a loss to compare. */
+  tilt: TiltStats | null;
 };
 
 export const ROLLING = 10;
@@ -137,6 +143,9 @@ export function buildProfile(reviewed: ReviewedGame[]): Profile {
     timeTroubleShare: errors ? timeTrouble / errors : 0,
     failedToConvert,
     trend,
+    habits: habitStats(chronological),
+    time: timeStats(chronological),
+    tilt: tiltStats(chronological),
   };
 }
 

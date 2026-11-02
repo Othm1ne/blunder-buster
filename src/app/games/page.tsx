@@ -8,6 +8,7 @@ import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import { playerExists, type TimeClass } from "@/lib/chesscom";
 import { isAnalyzed, type GameDoc } from "@/lib/analysis";
 import { GameRow } from "@/components/GameRow";
+import { TiltWarning } from "@/components/TiltWarning";
 import { getProfile, listGames, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
 
 type Filter = "all" | TimeClass;
@@ -148,6 +149,8 @@ export default function GamesPage() {
         {status && <p className="w-full text-sm">{status}</p>}
         {error && <p className="w-full text-sm text-[var(--bad)]">{error}</p>}
       </section>
+
+      <TiltWarning games={games} />
 
       {username && games.length > 0 && (
         <section className="card flex flex-wrap items-center gap-3">

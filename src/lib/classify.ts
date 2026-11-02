@@ -12,6 +12,8 @@ export type MistakeType =
   | "missed_mate" // you had a forced mate (in 1-3) and didn't play it
   | "hung_piece" // the opponent can simply take material
   | "fork" // the opponent's reply attacks two of your valuable pieces at once
+  | "pin" // the reply pins your piece to a more valuable one behind it
+  | "skewer" // the reply attacks a valuable piece and wins the one behind it when it moves
   | "missed_material" // the opponent left something hanging and you didn't take it
   | "tactic" // you lose material to a longer combination
   | "other"; // positional / harder to name
@@ -24,6 +26,8 @@ export type MistakeDetails = {
   by?: PieceSymbol;
   /** Forked squares. */
   targets?: Square[];
+  /** Pins and skewers: your piece behind the attacked one, on the same line. */
+  behind?: PieceSymbol;
   /** Material swing in pawns (positive = bad for you, or what you missed). */
   material?: number;
   mateIn?: number;
@@ -227,6 +231,23 @@ function diagnose(m: MoveReview, before: EngineEval, after: EngineEval): { type:
       if (targets.length >= 2 && lost >= MIN_MATERIAL) {
         return { type: "fork", details: { piece: forker?.type, by: forker?.type, square: reply.to, targets, material: lost, threatSan } };
       }
+
+      const line = lost >= MIN_MATERIAL ? lineTactic(afterReply, reply.to, me) : null;
+      if (line) {
+        const { kind, front, back } = line;
+        return {
+          type: kind,
+          details: {
+            piece: front.type,
+            square: front.square,
+            by: forker?.type,
+            behind: back.type,
+            targets: [front.square, back.square],
+            material: lost,
+            threatSan,
+          },
+        };
+      }
     } catch {
       // illegal reply from a shallow search: ignore
     }
@@ -244,6 +265,38 @@ function diagnose(m: MoveReview, before: EngineEval, after: EngineEval): { type:
   }
 
   return { type: "other", details: { threatSan } };
+}
+
+const DIAGONALS: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+const STRAIGHTS: [number, number][] = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/**
+ * Pin or skewer by the bishop, rook or queen on `from`: it attacks one of my pieces and another
+ * of mine stands right behind it on the same line. More valuable behind = pin (the front piece
+ * can't move away), less valuable behind = skewer (the front piece moves and the back one falls).
+ */
+function lineTactic(chess: Chess, from: Square, me: Color) {
+  const slider = chess.get(from);
+  if (!slider || slider.color === me || !"brq".includes(slider.type)) return null;
+  const dirs = slider.type === "b" ? DIAGONALS : slider.type === "r" ? STRAIGHTS : [...DIAGONALS, ...STRAIGHTS];
+  const worth = (t: PieceSymbol) => (t === "k" ? 100 : VALUES[t]);
+  for (const [df, dr] of dirs) {
+    const found: { square: Square; type: PieceSymbol; color: Color }[] = [];
+    let f = from.charCodeAt(0) - 97 + df;
+    let r = Number(from[1]) - 1 + dr;
+    while (f >= 0 && f < 8 && r >= 0 && r < 8 && found.length < 2) {
+      const square = `${String.fromCharCode(97 + f)}${r + 1}` as Square;
+      const piece = chess.get(square);
+      if (piece) found.push({ square, type: piece.type, color: piece.color });
+      f += df;
+      r += dr;
+    }
+    const [front, back] = found;
+    if (!front || !back || front.color !== me || back.color !== me) continue;
+    if (worth(back.type) > worth(front.type) && VALUES[front.type] >= 3) return { kind: "pin" as const, front, back };
+    if (worth(front.type) > worth(back.type) && VALUES[back.type] >= 3) return { kind: "skewer" as const, front, back };
+  }
+  return null;
 }
 
 function worse(a: MoveLabel, b: MoveLabel): MoveLabel {

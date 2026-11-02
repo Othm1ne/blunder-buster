@@ -29,6 +29,8 @@ export const MISTAKE_NAMES: Record<MistakeType | "failed_to_convert" | "time_tro
   missed_mate: "Missed mate",
   hung_piece: "Hung a piece",
   fork: "Fell for a fork",
+  pin: "Got pinned",
+  skewer: "Got skewered",
   missed_material: "Missed free material",
   tactic: "Walked into a tactic",
   other: "Bad move",
@@ -60,6 +62,12 @@ export function explain(m: MoveReview): string {
       break;
     case "fork":
       text = `${d.threatSan ?? "The reply"} lets the ${by} attack ${d.targets?.length ?? 2} of your pieces at once (${d.targets?.join(", ")}).`;
+      break;
+    case "pin":
+      text = `${d.threatSan ?? "The reply"} pins your ${piece} on ${d.square} to your ${d.behind ? PIECE_NAMES[d.behind] : "piece"} behind it, and you lose about ${d.material} points.`;
+      break;
+    case "skewer":
+      text = `${d.threatSan ?? "The reply"} skewers your ${piece}: when it moves away, your ${d.behind ? PIECE_NAMES[d.behind] : "piece"} behind it falls.`;
       break;
     case "missed_material":
       text = `Free material! You could have taken the ${piece} on ${d.square}.`;

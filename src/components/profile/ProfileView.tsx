@@ -6,6 +6,7 @@ import { LABEL_STYLE, MISTAKE_NAMES, moveName } from "@/lib/describe";
 import type { Baseline } from "@/lib/games";
 import type { Phase, Profile } from "@/lib/profile";
 import { TIPS } from "@/lib/templates";
+import { CLOCK_BUCKETS, HABITS, QUICK_SECONDS, type TiltStats } from "@/lib/insights";
 import { TrendChart } from "./TrendChart";
 
 const PHASE_NAMES: Record<Phase, string> = { opening: "Opening (moves 1-12)", middlegame: "Middlegame", endgame: "Endgame" };
@@ -156,6 +157,46 @@ export function ProfileView({
         <TrendChart trend={profile.trend} baseline={baseline?.blundersPerGame} />
       </section>
 
+      <section className="flex flex-col gap-3">
+        <h2 className="font-display text-xl">Opening habits</h2>
+        <div className="grid gap-3 md:grid-cols-3">
+          {profile.habits.map((h) => (
+            <div key={h.habit} className="card flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-display text-lg">{HABITS[h.habit].name}</h3>
+                <span className="font-display text-2xl tabular-nums">{Math.round(h.share * 100)}%</span>
+              </div>
+              <p className="text-xs text-[var(--muted)]">
+                In {h.games} of your {profile.games} games
+              </p>
+              {h.scoreWith !== null && h.scoreWithout !== null && (
+                <p className="text-sm">
+                  You score <strong>{Math.round(h.scoreWith)}%</strong> when you do this, and{" "}
+                  <strong>{Math.round(h.scoreWithout)}%</strong> when you don&apos;t.
+                </p>
+              )}
+              {h.games > 0 ? (
+                <>
+                  <p className="rounded-lg bg-[var(--stripe)] px-3 py-2 text-sm">
+                    <strong>Fix it:</strong> {HABITS[h.habit].tip}
+                  </p>
+                  <div className="flex flex-col gap-1 text-sm">
+                    <span className="text-xs font-semibold text-[var(--muted)]">Recent games</span>
+                    {h.examples.map((ex) => (
+                      <Link key={ex.gameId} href={`/review?id=${ex.gameId}&ply=${ex.ply}`} className="underline">
+                        {ex.text} vs {ex.oppName}
+                      </Link>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-[var(--good)]">Never! Great opening discipline.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="grid gap-3 md:grid-cols-2">
         <section className="card flex flex-col gap-3">
           <h2 className="font-display text-xl">When do you slip?</h2>
@@ -174,20 +215,10 @@ export function ProfileView({
           )}
         </section>
 
-        <section className="card flex flex-col gap-3">
-          <h2 className="font-display text-xl">Clock trouble</h2>
-          <Bar
-            label="Mistakes made with under 30 seconds left"
-            share={profile.timeTroubleShare}
-            value={`${Math.round(profile.timeTroubleShare * 100)}%`}
-          />
-          <p className="text-sm text-[var(--muted)]">
-            {profile.timeTroubleShare >= 0.25
-              ? "A lot of your mistakes come from rushing at the end. Try 10+5 or 15+10 games and spend time early on."
-              : "The clock isn't your main problem: most mistakes happen with time to spare. Use it to blunder-check!"}
-          </p>
-        </section>
+        <ClockCard profile={profile} />
       </div>
+
+      {profile.tilt && <TiltCard tilt={profile.tilt} />}
 
       {baseline && (
         <section className="card flex flex-wrap items-center gap-3 text-sm">
@@ -208,5 +239,83 @@ export function ProfileView({
         </section>
       )}
     </div>
+  );
+}
+
+const rate = (r: { moves: number; errors: number }) => (r.moves ? r.errors / r.moves : 0);
+/** Below this many moves, a rate is too noisy to call out. */
+const MIN_MOVES = 20;
+
+function ClockCard({ profile }: { profile: Profile }) {
+  const time = profile.time;
+  const maxRate = Math.max(...(time?.byClock.map(rate) ?? [0]), 0.01);
+  const quick = time ? rate(time.quick) : 0;
+  const slow = time ? rate(time.slow) : 0;
+  const speedKnown = !!time && time.quick.moves >= MIN_MOVES && time.slow.moves >= MIN_MOVES;
+
+  return (
+    <section className="card flex flex-col gap-3">
+      <h2 className="font-display text-xl">Your clock</h2>
+      {time ? (
+        <>
+          <p className="text-xs font-semibold text-[var(--muted)]">Thinking time per move</p>
+          {(Object.keys(PHASE_NAMES) as Phase[]).map((p) => (
+            <Bar
+              key={p}
+              label={PHASE_NAMES[p]}
+              share={time.phases[p].share}
+              value={time.phases[p].moves ? `${time.phases[p].avgSeconds.toFixed(1)} s · ${Math.round(time.phases[p].share * 100)}% of your time` : "-"}
+            />
+          ))}
+          <p className="text-xs font-semibold text-[var(--muted)]">Mistake rate by time left on your clock</p>
+          {CLOCK_BUCKETS.map((label, i) => (
+            <Bar
+              key={label}
+              label={label}
+              share={rate(time.byClock[i]) / maxRate}
+              value={time.byClock[i].moves ? `${Math.round(rate(time.byClock[i]) * 100)}% of ${time.byClock[i].moves} moves` : "-"}
+            />
+          ))}
+          {speedKnown && (
+            <p className="text-sm">
+              Moves played in under {QUICK_SECONDS} seconds are mistakes <strong>{Math.round(quick * 100)}%</strong> of the
+              time, vs <strong>{Math.round(slow * 100)}%</strong> when you think longer.
+              {quick >= slow * 1.5 && quick > 0 ? " Those quick moves are costing you: take a breath first!" : ""}
+            </p>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">No clock data in these games.</p>
+      )}
+      <p className="text-sm text-[var(--muted)]">
+        {Math.round(profile.timeTroubleShare * 100)}% of your mistakes came with under 30 seconds left.{" "}
+        {profile.timeTroubleShare >= 0.25
+          ? "That's a lot: try 10+5 or 15+10 games and spend less time on easy early moves."
+          : "The clock isn't your main problem: use your spare time to blunder-check!"}
+      </p>
+    </section>
+  );
+}
+
+function TiltCard({ tilt }: { tilt: TiltStats }) {
+  const drop = tilt.otherwise.accuracy - tilt.afterLoss.accuracy;
+  const tilts = drop >= 3 || tilt.afterLoss.blunders >= tilt.otherwise.blunders + 0.5;
+  return (
+    <section className="card flex flex-wrap items-center gap-4">
+      <Mascot mood={tilts ? "shocked" : "proud"} size={56} />
+      <div className="min-w-56 flex-1">
+        <h2 className="font-display text-xl">After a loss</h2>
+        <p className="text-sm">
+          Right after losing, your accuracy is <strong>{Math.round(tilt.afterLoss.accuracy)}%</strong> with{" "}
+          {tilt.afterLoss.blunders.toFixed(1)} blunders a game ({tilt.afterLoss.games} games). Otherwise it&apos;s{" "}
+          <strong>{Math.round(tilt.otherwise.accuracy)}%</strong> with {tilt.otherwise.blunders.toFixed(1)}.
+        </p>
+        <p className="text-sm text-[var(--muted)]">
+          {tilts
+            ? "You tilt: losses follow you into the next game. After a loss, take a 10-minute break before playing again."
+            : "Losses don't throw you off. Nice nerves!"}
+        </p>
+      </div>
+    </section>
   );
 }

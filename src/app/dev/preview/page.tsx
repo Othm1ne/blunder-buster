@@ -43,6 +43,30 @@ const sampleProfile: Profile = {
     const blunders = Math.max(0, Math.round(3.6 - i * 0.07 + Math.sin(i * 1.7) * 1.4));
     return { gameId: `preview-${i}`, endTime: Date.UTC(2026, 8, 1 + i * 2), oppName: `Player${i + 1}`, blunders, rolling: 3.4 - i * 0.06 };
   }),
+  habits: [
+    { habit: "early_queen", games: 11, share: 0.37, scoreWith: 32, scoreWithout: 58, examples: [{ gameId: "preview", ply: 9, text: "5. Qb3", oppName: "MorphyFan" }] },
+    { habit: "no_castle", games: 17, share: 0.57, scoreWith: 41, scoreWithout: 55, examples: [{ gameId: "preview", ply: 19, text: "10. Nxb5", oppName: "MorphyFan" }] },
+    { habit: "same_piece", games: 0, share: 0, scoreWith: null, scoreWithout: 49, examples: [] },
+  ],
+  time: {
+    phases: {
+      opening: { avgSeconds: 4.2, share: 0.18, moves: 360 },
+      middlegame: { avgSeconds: 14.8, share: 0.61, moves: 420 },
+      endgame: { avgSeconds: 9.1, share: 0.21, moves: 150 },
+    },
+    byClock: [
+      { moves: 520, errors: 26 },
+      { moves: 240, errors: 17 },
+      { moves: 110, errors: 12 },
+      { moves: 60, errors: 11 },
+    ],
+    quick: { moves: 310, errors: 34 },
+    slow: { moves: 450, errors: 21 },
+  },
+  tilt: {
+    afterLoss: { games: 9, accuracy: 61.5, blunders: 3.1 },
+    otherwise: { games: 21, accuracy: 72.4, blunders: 2.0 },
+  },
 };
 const sampleBaseline = { createdAt: Date.UTC(2026, 8, 1), rapidRating: 600, blitzRating: 530, blundersPerGame: 3.1, mistakesPerGame: 1.9, accuracy: 66, games: 30 };
 

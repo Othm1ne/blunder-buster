@@ -9,7 +9,7 @@ import { moveName } from "./describe";
 // before you went wrong. Puzzles are rebuilt from your analyses each time (cheap); only your
 // spaced-repetition progress is stored, in users/{uid}/puzzles/{puzzleId}.
 
-export type PuzzleTheme = "mate" | "material" | "safety" | "king" | "fork" | "tactic";
+export type PuzzleTheme = "mate" | "material" | "safety" | "king" | "fork" | "line" | "tactic";
 
 export const THEMES: Record<PuzzleTheme, { name: string; prompt: string }> = {
   mate: { name: "Mates", prompt: "You had a checkmate here. Find it!" },
@@ -17,6 +17,7 @@ export const THEMES: Record<PuzzleTheme, { name: string; prompt: string }> = {
   safety: { name: "Piece safety", prompt: "You lost a piece from here. Find a safe move." },
   king: { name: "King safety", prompt: "Your king got mated from here. Find a move that keeps him safe." },
   fork: { name: "Forks", prompt: "A fork was coming. Find a move that avoids it." },
+  line: { name: "Pins & skewers", prompt: "A pin or skewer was coming. Find a move that avoids it." },
   tactic: { name: "Tactics", prompt: "You walked into a trick here. Find the best move." },
 };
 
@@ -26,6 +27,8 @@ const THEME_OF: Record<MistakeType, PuzzleTheme> = {
   hung_piece: "safety",
   allowed_mate: "king",
   fork: "fork",
+  pin: "line",
+  skewer: "line",
   tactic: "tactic",
   other: "tactic",
 };

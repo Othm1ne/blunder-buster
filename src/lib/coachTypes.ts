@@ -13,6 +13,8 @@ export type CoachMoveFacts = {
   square?: string;
   by?: string;
   targets?: string[];
+  /** Pins and skewers: your piece behind the attacked one. */
+  behind?: string;
   /** The opponent's best reply (for mistakes), in SAN. */
   threat?: string;
   /** The best move you could have played, in SAN. */

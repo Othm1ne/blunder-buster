@@ -10,6 +10,7 @@ import { Mascot, type MascotMood } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import { getGame } from "@/lib/games";
 import { reviewCached } from "@/lib/profile";
+import { HABITS, openingHabits } from "@/lib/insights";
 import type { GameAnalysis, GameDoc } from "@/lib/analysis";
 import { epd, THRESHOLDS, winChance, type MoveLabel, type MoveReview } from "@/lib/classify";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName, PIECE_NAMES } from "@/lib/describe";
@@ -96,6 +97,7 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
 
   const book = useOpeningBook();
   const review = useMemo(() => reviewCached(game, analysis, book), [game, analysis, book]);
+  const habits = useMemo(() => openingHabits(review), [review]);
   const total = review.moves.length;
 
   // AI coach: asked once per game (then cached on the game). Templates show until it answers or if it fails.
@@ -257,6 +259,16 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
             </span>
           ))}
         </span>
+        {habits.length > 0 && (
+          <span className="flex w-full flex-wrap items-center gap-2 pt-1 text-xs">
+            <span className="text-[var(--muted)]">Opening habits:</span>
+            {habits.map((h) => (
+              <button key={h.habit} className="chip hover:bg-[var(--stripe)]" onClick={() => goTo(h.ply)} title={HABITS[h.habit].tip}>
+                ⚠️ {HABITS[h.habit].name} ({h.text})
+              </button>
+            ))}
+          </span>
+        )}
       </section>
 
       <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4">

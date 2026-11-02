@@ -10,6 +10,8 @@ import type { GameDoc } from "@/lib/analysis";
 import { getProfile, listGames, syncGames, type SyncProgress } from "@/lib/games";
 import { useOpeningBook } from "@/lib/openings";
 import { reviewAll } from "@/lib/profile";
+import { tiltStats } from "@/lib/insights";
+import { TiltWarning } from "@/components/TiltWarning";
 import { computeProgress, XP, type ActivityDoc } from "@/lib/progress";
 import { loadPuzzleStates, today, WARMUP_SIZE, type PuzzleState } from "@/lib/puzzles";
 
@@ -137,6 +139,8 @@ export default function Today() {
           </Link>
         </div>
       )}
+
+      <TiltWarning games={data.games} stats={reviewed && tiltStats(reviewed)} />
 
       <section className="card flex flex-wrap items-center gap-4">
         <Mascot mood={mood} size={88} />

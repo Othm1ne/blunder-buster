@@ -43,6 +43,7 @@ function facts(m: MoveReview): CoachMoveFacts {
   if (d.square) f.square = d.square;
   if (d.by) f.by = PIECE_NAMES[d.by];
   if (d.targets) f.targets = d.targets;
+  if (d.behind) f.behind = PIECE_NAMES[d.behind];
   if (d.threatSan) f.threat = d.threatSan;
   if (m.bestSan && m.bestUci !== m.uci) f.best = m.bestSan;
   if (d.mateIn) f.mateIn = d.mateIn;

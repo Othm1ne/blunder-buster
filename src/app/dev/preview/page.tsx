@@ -11,6 +11,12 @@ import { ProfileView } from "@/components/profile/ProfileView";
 import type { Profile } from "@/lib/profile";
 import { PuzzleBoard } from "@/components/puzzles/PuzzleBoard";
 import type { Puzzle } from "@/lib/puzzles";
+import { GoalCard } from "@/components/coach/GoalCard";
+import { PlanCard } from "@/components/coach/PlanCard";
+import { ReportCardView } from "@/components/coach/ReportCardView";
+import type { RatingGoal } from "@/lib/goal";
+import { templatePlan, type StoredPlan } from "@/lib/plan";
+import { dayIndex } from "@/lib/weekly";
 
 // Dev-only page: renders the main UI pieces with a sample game (no login needed),
 // so the design can be checked in light and dark mode. Open /dev/preview while running `npm run dev`.
@@ -23,7 +29,8 @@ const firstFlagged = reviewGame(game.moves, game.analysis!.evals, game.myColor, 
   .at(-1);
 
 // A made-up profile (30 games, improving) to check the Blunder Profile design.
-const sampleMoves = reviewGame(game.moves, game.analysis!.evals, game.myColor, game.result, game.clocks).moves;
+const sampleReview = reviewGame(game.moves, game.analysis!.evals, game.myColor, game.result, game.clocks);
+const sampleMoves = sampleReview.moves;
 const ex = (ply: number) => ({ gameId: "preview", ply, move: { ...sampleMoves[ply - 1], label: "blunder" as const }, oppName: "MorphyFan" });
 const sampleProfile: Profile = {
   games: 30,
@@ -75,6 +82,32 @@ const samplePuzzle: Puzzle = {
   id: "preview_7", gameId: "preview", ply: 7, fen: "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4 4",
   color: "w", theme: "mate", kind: "attack", solution: ["h5f7"], mateIn: 1, winBest: 99, label: "blunder",
   played: "4. Qf3", oppName: "Knightmare", endTime: Date.UTC(2026, 9, 30),
+  prev: { fen: "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3", uci: "g8f6" },
+};
+
+// Coach page: six weeks of made-up games with a climbing rating (two a day, wins and losses mixed).
+const DAY = 24 * 60 * 60 * 1000;
+const coachGames: GameDoc[] = Array.from({ length: 84 }, (_, i) => ({
+  ...game,
+  id: `coach-${i}`,
+  timeClass: "rapid" as const,
+  endTime: Date.now() - (83 - i) * DAY / 2,
+  myRating: Math.round(600 + i * 1.6 + Math.sin(i) * 18),
+  result: (["win", "loss", "win", "draw", "loss"] as const)[i % 5],
+  oppName: `Rival${i}`,
+}));
+const coachReviewed = coachGames.map((g, i) => ({
+  game: g,
+  analysis: game.analysis!,
+  review: { ...sampleReview, accuracy: 62 + (i % 7) * 3, counts: { ...sampleReview.counts, blunder: (i * 7) % 4, mistake: i % 2 } },
+}));
+const sampleGoal: RatingGoal = { timeClass: "rapid", start: 610, target: 900, createdAt: Date.now() - 40 * DAY, deadline: "2027-03-01" };
+const samplePlan: StoredPlan = {
+  week: "preview",
+  plan: templatePlan(sampleProfile, [samplePuzzle]),
+  source: "template",
+  createdAt: Date.now(),
+  done: [0],
 };
 
 export default function Preview() {
@@ -106,7 +139,15 @@ export default function Preview() {
         <GameRow game={{ ...unanalyzed, id: "d" }} queued={false} onAnalyze={noop} />
       </ul>
 
-      <PuzzleBoard puzzle={samplePuzzle} onFinished={noop} onNext={noop} />
+      <PuzzleBoard puzzle={samplePuzzle} onFinished={noop} onNext={noop} blunderCheck />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <PlanCard stored={samplePlan} state="ready" error={null} today={dayIndex()} onToggle={noop} onRegenerate={noop} />
+        <div className="flex flex-col gap-4">
+          <GoalCard goal={sampleGoal} games={coachGames} onSave={async () => {}} />
+          <ReportCardView games={coachGames} reviewed={coachReviewed} />
+        </div>
+      </div>
 
       <ProfileView profile={sampleProfile} baseline={sampleBaseline} onResetBaseline={noop} />
 

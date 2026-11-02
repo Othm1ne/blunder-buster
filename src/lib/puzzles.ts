@@ -1,5 +1,5 @@
 import { Chess, type Color, type PieceSymbol, type Square } from "chess.js";
-import { collection, doc, getDoc, getDocs, setDoc } from "firebase/firestore";
+import { collection, doc, getDoc, getDocs, increment, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import type { MistakeType, MoveReview } from "./classify";
 import type { ReviewedGame } from "./profile";
@@ -51,6 +51,8 @@ export type Puzzle = {
   label: "mistake" | "blunder";
   /** e.g. "14... Nf6" (what you actually played in the game). */
   played: string;
+  /** Your opponent's move just before the puzzle position, for the blunder-check question. */
+  prev?: { fen: string; uci: string };
   oppName: string;
   endTime: number;
 };
@@ -112,7 +114,9 @@ export function buildPuzzles(reviewed: ReviewedGame[]): Puzzle[] {
       const kind = theme === "mate" || theme === "material" ? "attack" : "defend";
       const pv = evals[m.ply - 1]?.pv ?? m.bestUci;
       const mateIn = m.type === "missed_mate" ? m.details?.mateIn : undefined;
+      const prev = review.moves[m.ply - 2];
       puzzles.push({
+        ...(prev && { prev: { fen: prev.fenBefore, uci: prev.uci } }),
         id: `${game.id}_${m.ply}`,
         gameId: game.id,
         ply: m.ply,
@@ -131,6 +135,30 @@ export function buildPuzzles(reviewed: ReviewedGame[]): Puzzle[] {
     }
   }
   return puzzles;
+}
+
+/**
+ * Blunder check: your pieces that the opponent's move (`uci`, played from `fenBefore`) attacks.
+ * That's what the moved piece hits, plus anything newly attacked behind it (discovered attacks).
+ */
+export function attackedByMove(fenBefore: string, uci: string): Square[] {
+  const before = new Chess(fenBefore);
+  const after = new Chess(fenBefore);
+  let moved;
+  try {
+    moved = after.move(uciToMove(uci));
+  } catch {
+    return [];
+  }
+  const opp = moved.color;
+  const targets: Square[] = [];
+  for (const piece of after.board().flat()) {
+    if (!piece || piece.color === opp) continue;
+    const attackers = after.attackers(piece.square, opp);
+    if (attackers.includes(moved.to) || (attackers.length > 0 && before.attackers(piece.square, opp).length === 0))
+      targets.push(piece.square);
+  }
+  return targets;
 }
 
 /** New spaced-repetition state after an attempt. Solving on the first try moves the puzzle up a box. */
@@ -190,6 +218,22 @@ export function today(): string {
 export async function loadWarmup(uid: string): Promise<number> {
   const data = (await getDoc(doc(db(), "users", uid))).data() as { warmup?: { day: string; done: number } } | undefined;
   return data?.warmup?.day === today() ? data.warmup.done : 0;
+}
+
+/** Blunder-check trainer score: questions answered and answered right. */
+export type BlunderCheckStats = { asked: number; correct: number };
+
+export async function loadBlunderCheck(uid: string): Promise<BlunderCheckStats> {
+  const data = (await getDoc(doc(db(), "users", uid))).data() as { blunderCheck?: BlunderCheckStats } | undefined;
+  return data?.blunderCheck ?? { asked: 0, correct: 0 };
+}
+
+export async function recordBlunderCheck(uid: string, correct: boolean): Promise<void> {
+  await setDoc(
+    doc(db(), "users", uid),
+    { blunderCheck: { asked: increment(1), correct: increment(correct ? 1 : 0) } },
+    { merge: true },
+  );
 }
 
 export async function saveWarmup(uid: string, done: number): Promise<void> {

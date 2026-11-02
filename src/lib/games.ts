@@ -2,6 +2,7 @@ import { collection, doc, getDoc, getDocs, limit, orderBy, query, setDoc, writeB
 import { db } from "./firebase";
 import { archiveLabel, fetchArchive, fetchArchiveUrls, toStoredGame, type StoredGame } from "./chesscom";
 import type { GameDoc } from "./analysis";
+import type { RatingGoal } from "./goal";
 
 // Firestore layout:
 //   users/{uid}               -> UserProfile
@@ -16,6 +17,8 @@ export type UserProfile = {
   lastSyncAt?: number;
   /** Day-1 snapshot, so progress can be measured later (M6). */
   baseline?: Baseline;
+  /** Rating goal mode (V2). */
+  goal?: RatingGoal;
 };
 
 export type Baseline = {

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
@@ -15,34 +16,64 @@ import { recordActivity } from "@/lib/progress";
 import {
   buildPuzzles,
   loadPuzzleStates,
+  loadBlunderCheck,
   loadWarmup,
   nextState,
+  recordBlunderCheck,
   practiceQueue,
   savePuzzleState,
   saveWarmup,
   statusOf,
   THEMES,
   WARMUP_SIZE,
+  type BlunderCheckStats,
   type PuzzleState,
   type PuzzleTheme,
 } from "@/lib/puzzles";
 
+/** The blunder-check switch is a per-device preference (on by default). */
+const CHECK_KEY = "blunderCheck";
+function readCheckPref(): boolean {
+  try {
+    return localStorage.getItem(CHECK_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+// /puzzles?theme=fork opens on one theme (the weekly plan links here).
 export default function PuzzlesPage() {
+  return (
+    <Suspense fallback={<LoadingCard />}>
+      <PuzzlesFromUrl />
+    </Suspense>
+  );
+}
+
+function PuzzlesFromUrl() {
+  const theme = useSearchParams().get("theme");
+  return <PuzzleGym initialTheme={theme && theme in THEMES ? (theme as PuzzleTheme) : "all"} />;
+}
+
+function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
   const { user, loading } = useAuth();
   const { results } = useAnalysis();
   const book = useOpeningBook();
   const [games, setGames] = useState<GameDoc[] | null>(null);
   const [states, setStates] = useState<Map<string, PuzzleState>>(new Map());
   const [warmup, setWarmup] = useState(0);
-  const [theme, setTheme] = useState<"all" | PuzzleTheme>("all");
+  const [check, setCheck] = useState(readCheckPref);
+  const [checkStats, setCheckStats] = useState<BlunderCheckStats>({ asked: 0, correct: 0 });
+  const [theme, setTheme] = useState<"all" | PuzzleTheme>(initialTheme);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    Promise.all([listGames(user.uid), loadPuzzleStates(user.uid), loadWarmup(user.uid)])
-      .then(([g, s, w]) => {
+    Promise.all([listGames(user.uid), loadPuzzleStates(user.uid), loadWarmup(user.uid), loadBlunderCheck(user.uid)])
+      .then(([g, s, w, c]) => {
+        if (!cancelled) setCheckStats(c);
         if (cancelled) return;
         setGames(g);
         setStates(s);
@@ -79,6 +110,22 @@ export default function PuzzlesPage() {
     savePuzzleState(user.uid, current.id, state).catch(() => undefined);
     saveWarmup(user.uid, done).catch(() => undefined);
     recordActivity(user.uid, { warmupDone: done === WARMUP_SIZE }).catch(() => undefined);
+  }
+
+  function onCheck(correct: boolean) {
+    if (!user) return;
+    setCheckStats((c) => ({ asked: c.asked + 1, correct: c.correct + (correct ? 1 : 0) }));
+    recordBlunderCheck(user.uid, correct).catch(() => undefined);
+  }
+
+  function toggleCheck() {
+    const next = !check;
+    setCheck(next);
+    try {
+      localStorage.setItem(CHECK_KEY, next ? "on" : "off");
+    } catch {
+      // private mode: the switch just won't be remembered
+    }
   }
 
   function onNext() {
@@ -158,8 +205,33 @@ export default function PuzzlesPage() {
           ))}
       </div>
 
+      <div className="card flex flex-wrap items-center gap-3 !py-2 text-sm">
+        <button
+          role="switch"
+          aria-checked={check}
+          onClick={toggleCheck}
+          className={`rounded-full border-2 px-3 py-0.5 font-semibold ${
+            check ? "border-[var(--good)] bg-[var(--good)] text-white" : "border-[var(--line)] bg-[var(--card)]"
+          }`}
+        >
+          🛡️ Blunder check {check ? "on" : "off"}
+        </button>
+        <span className="min-w-48 flex-1 text-[var(--muted)]">
+          Before each move, spot what their last move attacks.
+          {checkStats.asked > 0 &&
+            ` You've spotted it right ${Math.round((checkStats.correct / checkStats.asked) * 100)}% of the time (${checkStats.correct}/${checkStats.asked}).`}
+        </span>
+      </div>
+
       {current ? (
-        <PuzzleBoard key={current.id} puzzle={current} onFinished={onFinished} onNext={onNext} />
+        <PuzzleBoard
+          key={`${current.id}-${check}`}
+          puzzle={current}
+          onFinished={onFinished}
+          onNext={onNext}
+          blunderCheck={check}
+          onCheck={onCheck}
+        />
       ) : (
         <div className="card flex flex-wrap items-center gap-4">
           <Mascot mood="proud" size={64} />

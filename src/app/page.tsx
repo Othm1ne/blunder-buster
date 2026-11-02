@@ -12,12 +12,23 @@ import { useOpeningBook } from "@/lib/openings";
 import { reviewAll } from "@/lib/profile";
 import { tiltStats } from "@/lib/insights";
 import { TiltWarning } from "@/components/TiltWarning";
+import { DayAction } from "@/components/coach/PlanCard";
+import { goalProgress, type RatingGoal } from "@/lib/goal";
+import { loadPlan, type StoredPlan } from "@/lib/plan";
+import { dayIndex, weekKey, weekStart } from "@/lib/weekly";
 import { computeProgress, XP, type ActivityDoc } from "@/lib/progress";
 import { loadPuzzleStates, today, WARMUP_SIZE, type PuzzleState } from "@/lib/puzzles";
 
 const PLAY_URL = "https://www.chess.com/play/online/new";
 
-type Data = { games: GameDoc[]; states: Map<string, PuzzleState>; activity: ActivityDoc; username?: string };
+type Data = {
+  games: GameDoc[];
+  states: Map<string, PuzzleState>;
+  activity: ActivityDoc;
+  username?: string;
+  goal?: RatingGoal;
+  plan: StoredPlan | null;
+};
 
 function Mission({
   done,
@@ -60,8 +71,13 @@ export default function Today() {
   const [sync, setSync] = useState<SyncProgress | null>(null);
 
   const load = useCallback(async (uid: string): Promise<Data> => {
-    const [games, states, profile] = await Promise.all([listGames(uid), loadPuzzleStates(uid), getProfile(uid)]);
-    return { games, states, activity: profile as ActivityDoc, username: profile.chessComUsername };
+    const [games, states, profile, plan] = await Promise.all([
+      listGames(uid),
+      loadPuzzleStates(uid),
+      getProfile(uid),
+      loadPlan(uid, weekKey(weekStart())),
+    ]);
+    return { games, states, activity: profile as ActivityDoc, username: profile.chessComUsername, goal: profile.goal, plan };
   }, []);
 
   useEffect(() => {
@@ -172,6 +188,8 @@ export default function Today() {
         </div>
       </section>
 
+      <ThisWeek data={data} />
+
       <section>
         <h2 className="font-display mb-3 text-xl">
           Today&apos;s missions <span className="text-base text-[var(--muted)]">({missionsDone}/3)</span>
@@ -257,5 +275,56 @@ export default function Today() {
         {XP.cleanGame}, warm-up +{XP.warmup}, each active day +{XP.activeDay}.
       </p>
     </div>
+  );
+}
+
+/** Today's task from the weekly plan, and the rating goal at a glance. Both live on the Coach page. */
+function ThisWeek({ data }: { data: Data }) {
+  const day = data.plan?.plan.days[dayIndex()];
+  const done = data.plan?.done.includes(dayIndex());
+  const goal = data.goal && goalProgress(data.goal, data.games);
+  return (
+    <section className="card flex flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <h2 className="font-display text-xl">This week</h2>
+        <Link href="/coach" className="ml-auto text-sm underline">
+          Open your coach →
+        </Link>
+      </div>
+      {day ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-sm">
+            <span className="font-semibold">Today&apos;s plan: {day.title}</span>
+            {done && <span className="chip ml-2" style={{ color: "var(--good)" }}>✓ done</span>}
+          </p>
+          <p className="text-sm text-[var(--muted)]">{day.task}</p>
+          {!done && (
+            <div className="flex flex-wrap gap-2">
+              <DayAction day={day} />
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm text-[var(--muted)]">
+          Your weekly plan is waiting: Sir Blunderbuss writes it from your Blunder Profile.{" "}
+          <Link href="/coach" className="underline">
+            Get it
+          </Link>
+        </p>
+      )}
+      {data.goal && goal ? (
+        <ProgressBar
+          percent={goal.percent}
+          label={`Goal ${data.goal.target} ${data.goal.timeClass}: ${goal.current} now, ${Math.max(0, data.goal.target - goal.current)} to go`}
+        />
+      ) : (
+        <p className="text-sm text-[var(--muted)]">
+          No rating goal yet.{" "}
+          <Link href="/coach" className="underline">
+            Set one
+          </Link>
+        </p>
+      )}
+    </section>
   );
 }

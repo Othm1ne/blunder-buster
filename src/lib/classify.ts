@@ -74,8 +74,11 @@ export type GameReview = {
   opening?: string;
 };
 
-/** Win-chance drop (percentage points) at which a move gets each label (same scale as Lichess). */
-const THRESHOLDS = { inaccuracy: 10, mistake: 20, blunder: 30 };
+/**
+ * Win-chance drop (percentage points) at which a move gets each label. Same as Lichess, whose
+ * 0.1 / 0.2 / 0.3 thresholds are on a -1..1 scale, i.e. 5 / 10 / 15 points on our 0-100 scale.
+ */
+export const THRESHOLDS = { inaccuracy: 5, mistake: 10, blunder: 15 };
 /** "Clearly winning" for failed-to-convert, in winning chances. */
 const WINNING = 85;
 const TIME_TROUBLE_SECONDS = 30;
@@ -100,6 +103,35 @@ export function winChance(cp: number): number {
 /** Per-move accuracy from the drop in winning chances (Lichess formula). */
 function moveAccuracy(drop: number): number {
   return Math.max(0, Math.min(100, 103.1668 * Math.exp(-0.04354 * Math.max(0, drop)) - 3.1669 + 1));
+}
+
+/**
+ * Game accuracy the Lichess way: the average of a volatility-weighted mean and a harmonic mean of
+ * your move accuracies. Calm positions weigh more (a blunder there is all on you), and the harmonic
+ * mean stops a couple of blunders from being averaged away by a pile of easy moves.
+ */
+function gameAccuracy(moves: MoveReview[], evals: EngineEval[], me: Color): number {
+  const wins = evals.slice(0, moves.length + 1).map((e) => winChance(e.cp));
+  const size = Math.max(2, Math.min(8, Math.floor(wins.length / 10)));
+  let weighted = 0;
+  let weights = 0;
+  let inverse = 0;
+  let count = 0;
+  moves.forEach((m, i) => {
+    if (m.color !== me) return;
+    const start = Math.max(0, i - size + 2);
+    const weight = Math.max(0.5, Math.min(12, stdDev(wins.slice(start, start + size))));
+    weighted += m.accuracy * weight;
+    weights += weight;
+    inverse += 1 / Math.max(1, m.accuracy);
+    count++;
+  });
+  return count ? (weighted / weights + count / inverse) / 2 : 0;
+}
+
+function stdDev(xs: number[]): number {
+  const mean = xs.reduce((s, x) => s + x, 0) / xs.length;
+  return Math.sqrt(xs.reduce((s, x) => s + (x - mean) ** 2, 0) / xs.length);
 }
 
 /** Who is mating in this evaluation, if anyone. */
@@ -388,7 +420,7 @@ export function reviewGame(
 
   return {
     moves: reviewed,
-    accuracy: mine.length ? mine.reduce((s, m) => s + m.accuracy, 0) / mine.length : 0,
+    accuracy: gameAccuracy(reviewed, evals, me),
     counts,
     mistakeTypes,
     failedToConvert,

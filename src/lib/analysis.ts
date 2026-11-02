@@ -6,10 +6,11 @@ import type { StoredGame } from "./chesscom";
 import type { GameCoach } from "./coach";
 
 /** Bump ANALYSIS_VERSION when the settings change and old results should be redone. */
-export const ANALYSIS_DEPTH = 14;
-export const ANALYSIS_MAX_MS = 1000;
+export const ANALYSIS_DEPTH = 16;
+export const ANALYSIS_MAX_MS = 2000;
 // v2: MultiPV 2 (second-best score, for "Great" moves).
-export const ANALYSIS_VERSION = 2;
+// v3: depth 16 / 2 s (depth 14 / 1 s often stopped early and gave noisy evals), analyzed last move first.
+export const ANALYSIS_VERSION = 3;
 
 export type GameAnalysis = {
   version: number;
@@ -45,12 +46,14 @@ export async function analyzeGame(
 ): Promise<GameAnalysis> {
   const engine = getEngine();
   const fens = gamePositions(game.moves);
-  const evals: EngineEval[] = [];
+  const evals: EngineEval[] = new Array(fens.length);
 
+  // Last position first: the engine's hash table then already knows how the game goes on,
+  // which makes neighbouring evaluations agree with each other (fewer fake swings).
   onProgress(0, fens.length);
-  for (const fen of fens) {
-    evals.push(await engine.evaluate(fen, ANALYSIS_DEPTH, ANALYSIS_MAX_MS));
-    onProgress(evals.length, fens.length);
+  for (let i = fens.length - 1; i >= 0; i--) {
+    evals[i] = await engine.evaluate(fens[i], ANALYSIS_DEPTH, ANALYSIS_MAX_MS);
+    onProgress(fens.length - i, fens.length);
   }
 
   const analysis: GameAnalysis = {

@@ -15,7 +15,7 @@ type Filter = "all" | TimeClass;
 /** "Analyze" button targets your most recent games. */
 const BATCH_GAMES = 50;
 /** Rough average, used only for the time estimate. */
-const SECONDS_PER_GAME = 10;
+const SECONDS_PER_GAME = 25;
 
 export default function GamesPage() {
   const { user, loading } = useAuth();
@@ -174,7 +174,7 @@ export default function GamesPage() {
               <p className="flex-1">
                 <strong>{pending.length}</strong> of your latest {Math.min(BATCH_GAMES, games.length)} games{" "}
                 {outdated === pending.length
-                  ? "were analyzed before Great-move detection existed."
+                  ? "were analyzed with older, less precise engine settings."
                   : "haven't been checked for blunders yet."}
               </p>
               <button className="btn-primary" onClick={() => enqueue(pending)}>

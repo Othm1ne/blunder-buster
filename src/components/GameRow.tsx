@@ -48,7 +48,8 @@ export function GameRow({
 
   return (
     <li className="card !py-2">
-      <div className="flex items-center gap-3">
+      {/* On phones the chips and buttons wrap onto a second line so the name isn't squeezed. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex-nowrap">
         <span className="font-display grid size-9 shrink-0 place-items-center rounded-full text-white" style={{ background: r.color }}>
           {r.label}
         </span>
@@ -66,37 +67,39 @@ export function GameRow({
           </p>
           <p>{new Date(g.endTime).toLocaleDateString()}</p>
         </div>
-        {review ? (
-          <button
-            onClick={() => setOpen(!open)}
-            className="flex shrink-0 items-center gap-1 rounded-full p-0.5 hover:bg-[var(--stripe)]"
-            aria-expanded={open}
-            title={open ? "Hide mistakes" : "Show mistakes"}
-          >
-            <span className="chip" style={{ color: accuracyColor(review.accuracy) }} title="Your accuracy">
-              {Math.round(review.accuracy)}%
-            </span>
-            <span className="chip" title="Blunders">
-              <span style={{ color: LABEL_STYLE.blunder.color }}>??</span>
-              {review.counts.blunder}
-            </span>
-            <span className="chip" title="Mistakes">
-              <span style={{ color: LABEL_STYLE.mistake.color }}>?</span>
-              {review.counts.mistake}
-            </span>
-            <span className="w-4 text-xs text-[var(--muted)]">{open ? "▲" : "▼"}</span>
-          </button>
-        ) : null}
-        {review ? (
-          <Link href={`/review?id=${g.id}`} className="btn-primary shrink-0 !px-3 !py-0.5 text-sm !shadow-none">
-            Review
-          </Link>
-        ) : (
-          <AnalysisBadge queued={queued} percent={percent} onAnalyze={onAnalyze} />
-        )}
-        <a href={g.url} target="_blank" rel="noreferrer" className="hidden text-xs underline shrink-0 sm:inline">
-          chess.com
-        </a>
+        <div className={`flex items-center justify-end gap-3 sm:w-auto ${review ? "w-full" : ""}`}>
+          {review ? (
+            <button
+              onClick={() => setOpen(!open)}
+              className="flex shrink-0 items-center gap-1 rounded-full p-0.5 hover:bg-[var(--stripe)]"
+              aria-expanded={open}
+              title={open ? "Hide mistakes" : "Show mistakes"}
+            >
+              <span className="chip" style={{ color: accuracyColor(review.accuracy) }} title="Your accuracy">
+                {Math.round(review.accuracy)}%
+              </span>
+              <span className="chip" title="Blunders">
+                <span style={{ color: LABEL_STYLE.blunder.color }}>??</span>
+                {review.counts.blunder}
+              </span>
+              <span className="chip" title="Mistakes">
+                <span style={{ color: LABEL_STYLE.mistake.color }}>?</span>
+                {review.counts.mistake}
+              </span>
+              <span className="w-4 text-xs text-[var(--muted)]">{open ? "▲" : "▼"}</span>
+            </button>
+          ) : null}
+          {review ? (
+            <Link href={`/review?id=${g.id}`} className="btn-primary shrink-0 !px-3 !py-0.5 text-sm !shadow-none">
+              Review
+            </Link>
+          ) : (
+            <AnalysisBadge queued={queued} percent={percent} onAnalyze={onAnalyze} />
+          )}
+          <a href={g.url} target="_blank" rel="noreferrer" className="hidden text-xs underline shrink-0 sm:inline">
+            chess.com
+          </a>
+        </div>
       </div>
 
       {open && review && (

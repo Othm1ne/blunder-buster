@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Fredoka, Geist } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
@@ -19,6 +19,17 @@ const fredoka = Fredoka({
 export const metadata: Metadata = {
   title: "Blunder Buster",
   description: "Your fun chess coach that hunts down your blunders.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  // Lets the phone tab bar reach the screen edge; it pads itself with the safe-area insets.
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#e8b86d" },
+    { media: "(prefers-color-scheme: dark)", color: "#2b2119" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

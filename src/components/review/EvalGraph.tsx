@@ -55,10 +55,7 @@ export function EvalGraph({
           strokeWidth={1.5}
           vectorEffect="non-scaling-stroke"
         >
-          <title>
-            {moveName(m)}
-            {LABEL_STYLE[m.label].symbol}
-          </title>
+          <title>{`${moveName(m)}${LABEL_STYLE[m.label].symbol}`}</title>
         </circle>
       ))}
     </svg>

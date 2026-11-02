@@ -10,7 +10,7 @@ import { Mascot, type MascotMood } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import { getGame } from "@/lib/games";
 import type { GameAnalysis, GameDoc } from "@/lib/analysis";
-import { epd, reviewGame, winChance, type MoveReview } from "@/lib/classify";
+import { epd, reviewGame, THRESHOLDS, winChance, type MoveLabel, type MoveReview } from "@/lib/classify";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName, PIECE_NAMES } from "@/lib/describe";
 import { getEngine } from "@/lib/engine";
 import { useOpeningBook } from "@/lib/openings";
@@ -21,8 +21,8 @@ import { EvalBar } from "./EvalBar";
 import { EvalGraph } from "./EvalGraph";
 import { MoveList } from "./MoveList";
 
-/** A retry counts as solved if it keeps your winning chances within this many points of the best move. */
-const RETRY_TOLERANCE = 8;
+/** A retry counts as solved if it isn't even an inaccuracy compared with the best move. */
+const RETRY_TOLERANCE = THRESHOLDS.inaccuracy;
 const RETRY_DEPTH = 12;
 const GREEN = "#3fa34d";
 const RED = "#e5484d";
@@ -76,7 +76,7 @@ export function ReviewScreen({ id, initialPly = 0 }: { id: string | null; initia
             <ProgressBar percent={(current.done / current.total) * 100} label="Analyzing…" />
           ) : (
             <button className="btn-primary" onClick={() => enqueue([game], { first: true })}>
-              Analyze it now (~6 s)
+              Analyze it now (~20 s)
             </button>
           )}
         </div>
@@ -173,6 +173,8 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
   let position = move ? move.fenAfter : review.moves[0]?.fenBefore ?? new Chess().fen();
   const arrows: Arrow[] = [];
   const squareStyles: Record<string, React.CSSProperties> = {};
+  // Classification badge on the square the move landed on (like Chess.com), so it's visible without scrolling.
+  let badge: { square: string; label: MoveLabel } | null = null;
   const highlight = (from: string, to: string, color: string) => {
     squareStyles[from] = { background: `${color}55` };
     squareStyles[to] = { background: `${color}88` };
@@ -186,6 +188,7 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
     if (move.bestUci) arrows.push({ startSquare: move.bestUci.slice(0, 2), endSquare: move.bestUci.slice(2, 4), color: GREEN });
   } else if (move) {
     highlight(move.uci.slice(0, 2), move.uci.slice(2, 4), LABEL_STYLE[move.label].color);
+    badge = { square: move.uci.slice(2, 4), label: move.label };
     const threat = analysis.evals[ply]?.best;
     if (isMyMistake(move) && threat) arrows.push({ startSquare: threat.slice(0, 2), endSquare: threat.slice(2, 4), color: RED });
   }
@@ -232,19 +235,21 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
   const myTurnChar = myColor === "white" ? "w" : "b";
   const counts = review.counts;
 
+  // Phones get one column in reading order: board, controls, then what the move was (no scrolling
+  // between moves). The column wrappers are `contents` there so `order-*` can interleave their children.
   return (
-    <div className="flex flex-col gap-4">
-      <section className="card flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="flex flex-col gap-3 sm:gap-4">
+      <section className="card flex flex-wrap items-center gap-x-4 gap-y-1 !p-3 sm:gap-y-2 sm:!p-4">
         <Link href="/games" className="text-sm underline">
           ← Games
         </Link>
-        <h1 className="font-display text-xl">
+        <h1 className="font-display min-w-0 text-lg sm:text-xl">
           vs {game.oppName} <span className="text-[var(--muted)] text-base">({game.oppRating})</span>
         </h1>
-        <span className="text-sm text-[var(--muted)]">
+        <span className="w-full text-xs text-[var(--muted)] sm:w-auto sm:text-sm">
           {game.result === "win" ? "You won" : game.result === "loss" ? "You lost" : "Draw"} · {game.resultDetail} · {review.opening ?? game.opening}
         </span>
-        <span className="ml-auto flex flex-wrap gap-2 text-sm font-semibold">
+        <span className="flex flex-wrap gap-2 text-sm font-semibold sm:ml-auto">
           <span>Accuracy {Math.round(review.accuracy)}%</span>
           {(["brilliant", "great", "blunder", "mistake", "inaccuracy"] as const)
             .filter((l) => counts[l] > 0 || l === "blunder" || l === "mistake")
@@ -256,9 +261,9 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
         </span>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-2">
+      <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-4">
+        <div className="contents lg:flex lg:flex-col lg:gap-3">
+          <div className="order-1 flex gap-2 lg:order-none">
             <EvalBar value={analysis.evals[retry ? retry.ply - 1 : showBest && move ? ply - 1 : ply]} orientation={orientation} />
             <div className="min-w-0 flex-1">
               <Chessboard
@@ -274,66 +279,124 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
                   onPieceDrop: ({ sourceSquare, targetSquare }) => onRetryDrop(sourceSquare, targetSquare),
                   darkSquareStyle: { backgroundColor: "#b58863" },
                   lightSquareStyle: { backgroundColor: "#f0d9b5" },
+                  squareRenderer: ({ square, children }) => (
+                    <div style={{ width: "100%", height: "100%", position: "relative", containerType: "size", ...squareStyles[square] }}>
+                      {children}
+                      {badge?.square === square && <MoveBadge label={badge.label} />}
+                    </div>
+                  ),
                 }}
               />
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <button className="btn-secondary" onClick={() => goTo(0)} aria-label="First move">
-              ⏮
+          <div className="order-2 flex flex-wrap items-center gap-2 lg:order-none">
+            <div className="grid w-full grid-cols-4 gap-2 sm:flex sm:w-auto">
+              <button className="btn-secondary !py-2 sm:!py-1.5" onClick={() => goTo(0)} aria-label="First move">
+                <NavIcon kind="first" />
+              </button>
+              <button className="btn-secondary !py-2 sm:!py-1.5" onClick={() => goTo(ply - 1)} aria-label="Previous move">
+                <NavIcon kind="prev" />
+              </button>
+              <button className="btn-secondary !py-2 sm:!py-1.5" onClick={() => goTo(ply + 1)} aria-label="Next move">
+                <NavIcon kind="next" />
+              </button>
+              <button className="btn-secondary !py-2 sm:!py-1.5" onClick={() => goTo(total)} aria-label="Last move">
+                <NavIcon kind="last" />
+              </button>
+            </div>
+            <button className="btn-primary flex-1 sm:flex-none" onClick={nextMistake} disabled={counts.mistake + counts.blunder === 0}>
+              Next mistake<span className="hidden sm:inline">&nbsp;(N)</span>
             </button>
-            <button className="btn-secondary" onClick={() => goTo(ply - 1)} aria-label="Previous move">
-              ◀
-            </button>
-            <button className="btn-secondary" onClick={() => goTo(ply + 1)} aria-label="Next move">
-              ▶
-            </button>
-            <button className="btn-secondary" onClick={() => goTo(total)} aria-label="Last move">
-              ⏭
-            </button>
-            <button className="btn-primary" onClick={nextMistake} disabled={counts.mistake + counts.blunder === 0}>
-              Next mistake (N)
-            </button>
-            <button className="btn-secondary ml-auto" onClick={() => setFlipped(!flipped)}>
+            <button className="btn-secondary sm:ml-auto" onClick={() => setFlipped(!flipped)}>
               Flip
             </button>
           </div>
-          <EvalGraph evals={analysis.evals} moves={review.moves} ply={ply} onSelect={goTo} />
+          <div className="order-4 lg:order-none">
+            <EvalGraph evals={analysis.evals} moves={review.moves} ply={ply} onSelect={goTo} />
+          </div>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <CoachCard
-            coach={coach}
-            fallback={templateVerdict(review, game.result)}
-            state={coachState}
-            error={coachError}
-            canAsk={!!user}
-            onRetry={() => {
-              setCoachState("loading");
-              setCoachError(null);
-              askCoach();
-            }}
-          />
-          <MovePanel
-            seed={game.id}
-            coachText={move ? coach?.moves[String(move.ply)] : undefined}
-            bookName={move && move.label === "book" ? book?.[epd(move.fenAfter)] : undefined}
-            move={move}
-            retry={retry}
-            showBest={showBest}
-            onToggleBest={() => setShowBest(!showBest)}
-            onRetry={() => move && startRetry(move)}
-            onExitRetry={() => setRetry(null)}
-          />
-          <MoveList moves={review.moves} ply={ply} onSelect={goTo} />
+        <div className="contents lg:flex lg:flex-col lg:gap-3">
+          <div className="order-5 lg:order-none">
+            <CoachCard
+              coach={coach}
+              fallback={templateVerdict(review, game.result)}
+              state={coachState}
+              error={coachError}
+              canAsk={!!user}
+              onRetry={() => {
+                setCoachState("loading");
+                setCoachError(null);
+                askCoach();
+              }}
+            />
+          </div>
+          <div className="order-3 lg:order-none">
+            <MovePanel
+              seed={game.id}
+              coachText={move ? coach?.moves[String(move.ply)] : undefined}
+              bookName={move && move.label === "book" ? book?.[epd(move.fenAfter)] : undefined}
+              move={move}
+              retry={retry}
+              showBest={showBest}
+              onToggleBest={() => setShowBest(!showBest)}
+              onRetry={() => move && startRetry(move)}
+              onExitRetry={() => setRetry(null)}
+            />
+          </div>
+          <div className="order-6 lg:order-none">
+            <MoveList moves={review.moves} ply={ply} onSelect={goTo} />
+          </div>
           {review.failedToConvert && (
-            <p className="text-sm text-[var(--muted)]">
+            <p className="order-7 text-sm text-[var(--muted)] lg:order-none">
               You reached {Math.round(review.peakWin)}% winning chances in this game but didn&apos;t win it.
             </p>
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+/** Round label badge in the square's corner. Sized in container units so it scales with the board. */
+function MoveBadge({ label }: { label: MoveLabel }) {
+  const style = LABEL_STYLE[label];
+  return (
+    <span
+      className="pointer-events-none absolute grid place-items-center rounded-full font-bold leading-none text-white"
+      style={{
+        top: "3cqh",
+        right: "3cqw",
+        width: "40cqw",
+        height: "40cqw",
+        fontSize: label === "book" ? "22cqw" : "20cqw",
+        background: style.color,
+        border: "max(1.5px, 3cqw) solid #fff",
+        boxShadow: "0 1px 3px rgb(0 0 0 / 0.4)",
+        zIndex: 5,
+      }}
+      title={style.name}
+    >
+      {style.symbol}
+    </span>
+  );
+}
+
+/** Drawn icons: the emoji ones (⏮ ◀ ▶ ⏭) turn into blue tiles on phones. */
+function NavIcon({ kind }: { kind: "first" | "prev" | "next" | "last" }) {
+  const back = kind === "first" || kind === "prev";
+  const double = kind === "first" || kind === "last";
+  return (
+    <svg viewBox="0 0 24 24" className="size-5" fill="currentColor" aria-hidden style={back ? { transform: "scaleX(-1)" } : undefined}>
+      {double ? (
+        <>
+          <path d="M3 5l9 7-9 7z" />
+          <path d="M12 5l9 7-9 7z" />
+        </>
+      ) : (
+        <path d="M7 5l11 7-11 7z" />
+      )}
+    </svg>
   );
 }
 

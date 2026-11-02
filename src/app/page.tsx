@@ -73,9 +73,9 @@ export default function Today() {
     };
   }, [user, load]);
 
-  const reviewed = useMemo(() => (data ? reviewAll(data.games, results, book) : []), [data, results, book]);
+  const reviewed = useMemo(() => (data && book !== undefined ? reviewAll(data.games, results, book) : null), [data, results, book]);
   const progress = useMemo(
-    () => (data ? computeProgress(data.games, reviewed, data.states, data.activity) : null),
+    () => (data && reviewed ? computeProgress(data.games, reviewed, data.states, data.activity) : null),
     [data, reviewed],
   );
 

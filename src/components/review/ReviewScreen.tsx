@@ -9,8 +9,9 @@ import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot, type MascotMood } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import { getGame } from "@/lib/games";
+import { reviewCached } from "@/lib/profile";
 import type { GameAnalysis, GameDoc } from "@/lib/analysis";
-import { epd, reviewGame, THRESHOLDS, winChance, type MoveLabel, type MoveReview } from "@/lib/classify";
+import { epd, THRESHOLDS, winChance, type MoveLabel, type MoveReview } from "@/lib/classify";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName, PIECE_NAMES } from "@/lib/describe";
 import { getEngine } from "@/lib/engine";
 import { useOpeningBook } from "@/lib/openings";
@@ -94,10 +95,7 @@ export function ReviewView({ game, analysis, initialPly = 0 }: { game: GameDoc; 
   const [retry, setRetry] = useState<Retry | null>(null);
 
   const book = useOpeningBook();
-  const review = useMemo(
-    () => reviewGame(game.moves, analysis.evals, game.myColor, game.result, game.clocks, book),
-    [game, analysis, book],
-  );
+  const review = useMemo(() => reviewCached(game, analysis, book), [game, analysis, book]);
   const total = review.moves.length;
 
   // AI coach: asked once per game (then cached on the game). Templates show until it answers or if it fails.

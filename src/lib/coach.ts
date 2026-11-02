@@ -1,6 +1,7 @@
 import { doc, updateDoc } from "firebase/firestore";
 import type { User } from "firebase/auth";
 import { db } from "./firebase";
+import { forgetGames } from "./games";
 import type { GameDoc } from "./analysis";
 import type { GameReview, MoveReview } from "./classify";
 import type { CoachMoveFacts, CoachRequest, CoachResponse } from "./coachTypes";
@@ -102,5 +103,6 @@ export async function requestCoach(user: User, game: GameDoc, review: GameReview
     analyzedAt,
   };
   await updateDoc(doc(db(), "users", user.uid, "games", game.id), { coach });
+  forgetGames();
   return coach;
 }

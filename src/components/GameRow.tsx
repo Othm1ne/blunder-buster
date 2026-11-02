@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Mascot } from "./Mascot";
 import type { GameAnalysis, GameDoc } from "@/lib/analysis";
-import { reviewGame } from "@/lib/classify";
 import { useOpeningBook } from "@/lib/openings";
+import { reviewCached } from "@/lib/profile";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName } from "@/lib/describe";
 import { mascotLine } from "@/lib/templates";
 
@@ -39,15 +39,26 @@ export function GameRow({
 }) {
   const [open, setOpen] = useState(false);
   const book = useOpeningBook();
+  // Only review games that scroll into view: the list can hold 300 games and reviewing all of them
+  // up front froze the page for seconds on phones.
+  const row = useRef<HTMLLIElement>(null);
+  const [seen, setSeen] = useState(false);
+  useEffect(() => {
+    const el = row.current;
+    if (!el || seen) return;
+    const io = new IntersectionObserver(([e]) => e.isIntersecting && setSeen(true), { rootMargin: "300px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [seen]);
   const review = useMemo(
-    () => (analysis ? reviewGame(g.moves, analysis.evals, g.myColor, g.result, g.clocks, book) : null),
-    [analysis, g, book],
+    () => (analysis && seen && book !== undefined ? reviewCached(g, analysis, book) : null),
+    [analysis, g, book, seen],
   );
   const r = RESULT_STYLE[g.result];
   const mistakes = review?.moves.filter((m) => m.mine && (m.label === "blunder" || m.label === "mistake")) ?? [];
 
   return (
-    <li className="card !py-2">
+    <li ref={row} className="card !py-2">
       {/* On phones the chips and buttons wrap onto a second line so the name isn't squeezed. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 sm:flex-nowrap">
         <span className="font-display grid size-9 shrink-0 place-items-center rounded-full text-white" style={{ background: r.color }}>
@@ -67,7 +78,7 @@ export function GameRow({
           </p>
           <p>{new Date(g.endTime).toLocaleDateString()}</p>
         </div>
-        <div className={`flex items-center justify-end gap-3 sm:w-auto ${review ? "w-full" : ""}`}>
+        <div className={`flex items-center justify-end gap-3 sm:w-auto ${analysis ? "w-full" : ""}`}>
           {review ? (
             <button
               onClick={() => setOpen(!open)}
@@ -89,7 +100,7 @@ export function GameRow({
               <span className="w-4 text-xs text-[var(--muted)]">{open ? "▲" : "▼"}</span>
             </button>
           ) : null}
-          {review ? (
+          {analysis ? (
             <Link href={`/review?id=${g.id}`} className="btn-primary shrink-0 !px-3 !py-0.5 text-sm !shadow-none">
               Review
             </Link>

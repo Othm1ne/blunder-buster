@@ -54,7 +54,10 @@ export default function PuzzlesPage() {
     };
   }, [user]);
 
-  const puzzles = useMemo(() => (games ? buildPuzzles(reviewAll(games, results, book)) : []), [games, results, book]);
+  const puzzles = useMemo(
+    () => (games && book !== undefined ? buildPuzzles(reviewAll(games, results, book)) : []),
+    [games, results, book],
+  );
   const shown = useMemo(() => (theme === "all" ? puzzles : puzzles.filter((p) => p.theme === theme)), [puzzles, theme]);
   const queue = useMemo(() => practiceQueue(shown, states), [shown, states]);
   // Keep the puzzle on screen after it's done (it leaves the queue), until "Next".
@@ -91,7 +94,7 @@ export default function PuzzlesPage() {
       </div>
     );
   if (error) return <p className="card text-[var(--bad)]">{error}</p>;
-  if (!games) return <LoadingCard label="Building puzzles from your blunders…" />;
+  if (!games || book === undefined) return <LoadingCard label="Building puzzles from your blunders…" />;
 
   if (puzzles.length === 0)
     return (

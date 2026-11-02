@@ -289,14 +289,22 @@ function hangingPieces(fen: string, color: Color): { square: Square; type: Piece
  * (so it's a free choice, not damage control) and the move leaves a piece the opponent can win,
  * worth at least 2 points more than what the move itself captured (so plain trades don't count).
  */
-function sacrifice(m: MoveReview, captured: PieceSymbol | undefined): PieceSymbol | undefined {
-  if (hangingPieces(m.fenBefore, m.color).length > 0) return undefined;
+function sacrifice(m: MoveReview, captured: PieceSymbol | undefined, after: Chess): PieceSymbol | undefined {
+  // Cheap check first (this runs for every best move of every game): nothing to give up unless
+  // one of your knights-or-bigger is attacked. Listing all legal captures is the slow part.
+  const opp: Color = m.color === "w" ? "b" : "w";
+  const attacked = after
+    .board()
+    .flat()
+    .some((s) => s && s.color === m.color && VALUES[s.type] >= 3 && after.attackers(s.square, opp).length > 0);
+  if (!attacked) return undefined;
   const movedTo = m.uci.slice(2, 4);
   const given = hangingPieces(m.fenAfter, m.color)
     .map((p) => ({ ...p, net: VALUES[p.type] - (p.square === movedTo && captured ? VALUES[captured] : 0) }))
     .filter((p) => p.net >= MIN_MATERIAL)
     .sort((a, b) => VALUES[b.type] - VALUES[a.type]);
-  return given[0]?.type;
+  if (!given.length || hangingPieces(m.fenBefore, m.color).length > 0) return undefined;
+  return given[0].type;
 }
 
 export type OpeningBook = Record<string, string>;
@@ -318,9 +326,19 @@ export function reviewGame(
 
   for (let i = 0; i < moves.length && i + 1 < evals.length; i++) {
     const fenBefore = chess.fen();
+    const before = evals[i];
+    // Name the engine's move by playing and undoing it here: much cheaper than a new Chess(fen).
+    let bestSan: string | undefined;
+    if (before.best) {
+      try {
+        bestSan = chess.move(uciToMove(before.best)).san;
+        chess.undo();
+      } catch {
+        // illegal move from a shallow search: leave it unnamed
+      }
+    }
     const played = chess.move(moves[i]);
     const fenAfter = chess.fen();
-    const before = evals[i];
     const after = evals[i + 1];
     const color = played.color;
     const pov = (cp: number) => (color === "w" ? winChance(cp) : 100 - winChance(cp));
@@ -363,7 +381,7 @@ export function reviewGame(
       winAfter,
       accuracy: moveAccuracy(drop),
       bestUci: before.best,
-      bestSan: sanOf(fenBefore, before.best),
+      bestSan,
       clock: clocks[i],
     };
 
@@ -378,7 +396,7 @@ export function reviewGame(
       const forcesMate = mateWinner(after) === color && !played.san.endsWith("#");
       const piece =
         (winBefore < BRILLIANT_MAX_WIN || forcesMate) && winAfter >= BRILLIANT_MIN_WIN
-          ? sacrifice(m, played.captured)
+          ? sacrifice(m, played.captured, chess)
           : undefined;
       if (piece) {
         label = m.label = "brilliant";

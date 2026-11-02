@@ -2,6 +2,7 @@ import { Chess } from "chess.js";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import { getEngine, type EngineEval } from "./engine";
+import { forgetGames } from "./games";
 import type { StoredGame } from "./chesscom";
 import type { GameCoach } from "./coach";
 
@@ -64,5 +65,6 @@ export async function analyzeGame(
     analyzedAt: Date.now(),
   };
   await updateDoc(doc(db(), "users", uid, "games", game.id), { analysis });
+  forgetGames();
   return analysis;
 }

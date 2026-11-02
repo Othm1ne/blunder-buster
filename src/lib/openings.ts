@@ -15,9 +15,12 @@ function loadBook(): Promise<OpeningBook | null> {
   return loading;
 }
 
-/** The opening book, or null while it loads (reviews then just have no Book moves yet). */
-export function useOpeningBook(): OpeningBook | null {
-  const [book, setBook] = useState<OpeningBook | null>(null);
+/**
+ * The opening book: undefined while it loads, null if it failed (reviews then have no Book moves).
+ * Wait for it before reviewing many games, or every game gets reviewed twice.
+ */
+export function useOpeningBook(): OpeningBook | null | undefined {
+  const [book, setBook] = useState<OpeningBook | null | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     loadBook().then((b) => !cancelled && setBook(b));

@@ -42,16 +42,30 @@ export function phaseOf(m: MoveReview): Phase {
   return material <= ENDGAME_MATERIAL ? "endgame" : "middlegame";
 }
 
+// Reviewing a game takes ~10-30 ms (chess.js is slow), so every page shares one cache:
+// a game is reviewed once per visit, not again on every page or re-render.
+const cache = new Map<string, GameReview>();
+
+export function reviewCached(game: GameDoc, analysis: GameAnalysis, book: OpeningBook | null | undefined): GameReview {
+  const key = `${game.id}:${analysis.analyzedAt}:${book ? "book" : "nobook"}`;
+  let review = cache.get(key);
+  if (!review) {
+    review = reviewGame(game.moves, analysis.evals, game.myColor, game.result, game.clocks, book);
+    cache.set(key, review);
+  }
+  return review;
+}
+
 export function reviewAll(
   games: GameDoc[],
   extra: Map<string, GameAnalysis>,
-  book: OpeningBook | null,
+  book: OpeningBook | null | undefined,
 ): ReviewedGame[] {
   const out: ReviewedGame[] = [];
   for (const game of games) {
     const analysis = game.analysis ?? extra.get(game.id);
     if (!analysis) continue;
-    out.push({ game, analysis, review: reviewGame(game.moves, analysis.evals, game.myColor, game.result, game.clocks, book) });
+    out.push({ game, analysis, review: reviewCached(game, analysis, book) });
   }
   return out;
 }

@@ -48,6 +48,7 @@ export async function getProfile(uid: string): Promise<UserProfile> {
 export async function saveUsername(uid: string, username: string): Promise<void> {
   // A new username means a fresh import.
   await setDoc(userRef(uid), { chessComUsername: username.toLowerCase(), syncedArchives: [], latestEndTime: 0 }, { merge: true });
+  forgetGames();
 }
 
 export async function getGame(uid: string, id: string): Promise<GameDoc | null> {
@@ -55,9 +56,27 @@ export async function getGame(uid: string, id: string): Promise<GameDoc | null> 
   return snap.exists() ? (snap.data() as GameDoc) : null;
 }
 
-export async function listGames(uid: string, max = 300): Promise<GameDoc[]> {
-  const snap = await getDocs(query(gamesCol(uid), orderBy("endTime", "desc"), limit(max)));
-  return snap.docs.map((d) => d.data() as GameDoc);
+// The game list is a few MB with all the engine evals, so it's kept for the session: switching
+// pages is then instant (and costs no Firestore reads). Whatever writes a game calls forgetGames().
+let listed: { key: string; games: Promise<GameDoc[]> } | null = null;
+
+export function forgetGames(): void {
+  listed = null;
+}
+
+/** Newest first. Treat the result as read-only: it's shared between pages. */
+export function listGames(uid: string, max = 300): Promise<GameDoc[]> {
+  const key = `${uid}:${max}`;
+  if (listed?.key !== key) {
+    const games = getDocs(query(gamesCol(uid), orderBy("endTime", "desc"), limit(max))).then((snap) =>
+      snap.docs.map((d) => d.data() as GameDoc),
+    );
+    listed = { key, games };
+    games.catch(() => {
+      if (listed?.games === games) listed = null;
+    });
+  }
+  return listed.games;
 }
 
 async function writeGames(uid: string, games: StoredGame[], onSaved: (saved: number) => void): Promise<void> {
@@ -67,6 +86,7 @@ async function writeGames(uid: string, games: StoredGame[], onSaved: (saved: num
     // merge: never wipes analysis fields that later phases add to the same document.
     for (const g of chunk) batch.set(doc(gamesCol(uid), g.id), g, { merge: true });
     await batch.commit();
+    forgetGames();
     onSaved(i + chunk.length);
   }
 }

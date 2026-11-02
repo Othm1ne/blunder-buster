@@ -43,7 +43,7 @@ export default function ProfilePage() {
     };
   }, [user]);
 
-  const allReviewed = useMemo(() => (games ? reviewAll(games, results, book) : []), [games, results, book]);
+  const allReviewed = useMemo(() => (games && book !== undefined ? reviewAll(games, results, book) : []), [games, results, book]);
   const reviewed = useMemo(
     () =>
       allReviewed
@@ -78,7 +78,7 @@ export default function ProfilePage() {
       </div>
     );
   if (error) return <p className="card text-[var(--bad)]">{error}</p>;
-  if (!games) return <LoadingCard label="Studying your games…" />;
+  if (!games || book === undefined) return <LoadingCard label="Studying your games…" />;
 
   if (allReviewed.length < MIN_GAMES)
     return (

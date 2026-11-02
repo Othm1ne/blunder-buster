@@ -1,5 +1,6 @@
 import { arrayUnion, doc, setDoc, updateDoc } from "firebase/firestore";
 import { db } from "./firebase";
+import { forgetGames } from "./games";
 import type { GameDoc } from "./analysis";
 import type { ReviewedGame } from "./profile";
 import { today, WARMUP_SIZE, type PuzzleState } from "./puzzles";
@@ -32,6 +33,7 @@ export async function recordActivity(uid: string, opts: { warmupDone?: boolean }
 /** Remembers that you reviewed a game (for XP, the First Review badge and the daily mission). */
 export async function markReviewed(uid: string, gameId: string): Promise<void> {
   await updateDoc(doc(db(), "users", uid, "games", gameId), { reviewedAt: Date.now() });
+  forgetGames();
 }
 
 function dayKey(date: Date): string {

@@ -141,7 +141,12 @@ export default function Preview() {
 
       <PuzzleBoard puzzle={samplePuzzle} onFinished={noop} onNext={noop} blunderCheck />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div id="coach-empty" className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        <PlanCard stored={null} state="loading" error={null} today={dayIndex()} onToggle={noop} onRegenerate={noop} />
+        <GoalCard games={coachGames} onSave={async () => {}} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <PlanCard stored={samplePlan} state="ready" error={null} today={dayIndex()} onToggle={noop} onRegenerate={noop} />
         <div className="flex flex-col gap-4">
           <GoalCard goal={sampleGoal} games={coachGames} onSave={async () => {}} />

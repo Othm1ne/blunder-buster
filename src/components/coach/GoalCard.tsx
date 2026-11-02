@@ -102,7 +102,7 @@ function GoalForm({
     <form onSubmit={submit} className="card flex flex-col gap-3">
       <div className="flex items-center gap-3">
         <Mascot size={56} />
-        <div>
+        <div className="min-w-0">
           <h2 className="font-display text-xl">{goal ? "Change your goal" : "Set a rating goal"}</h2>
           <p className="text-sm text-[var(--muted)]">A target keeps the training honest. Sir Blunderbuss will track every game.</p>
         </div>
@@ -129,8 +129,9 @@ function GoalForm({
             key={timeClass}
             name="target"
             type="number"
+            inputMode="numeric"
             min={(current ?? 0) + 1}
-            step={10}
+            step={1}
             defaultValue={goal?.timeClass === timeClass ? goal.target : current ? suggestedTarget(current) : undefined}
             className="w-24 rounded-full border-2 border-[var(--line)] bg-[var(--paper)] px-3 py-1"
           />
@@ -141,7 +142,7 @@ function GoalForm({
             name="deadline"
             type="date"
             defaultValue={goal?.deadline}
-            className="rounded-full border-2 border-[var(--line)] bg-[var(--paper)] px-3 py-1"
+            className="w-40 rounded-full border-2 border-[var(--line)] bg-[var(--paper)] px-3 py-1"
           />
         </label>
       </div>

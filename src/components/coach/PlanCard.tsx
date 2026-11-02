@@ -51,10 +51,13 @@ export function PlanCard({
     return (
       <section className="card flex items-center gap-4">
         <Mascot size={56} />
-        <div className="min-w-48 flex-1">
+        <div className="min-w-0 flex-1">
           <h2 className="font-display text-xl">This week&apos;s plan</h2>
           {state === "loading" ? (
-            <ProgressBar label="Sir Blunderbuss is writing your plan from your Blunder Profile…" />
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm">Sir Blunderbuss is writing your plan from your Blunder Profile…</p>
+              <ProgressBar />
+            </div>
           ) : (
             <p className="text-sm text-[var(--muted)]">{error ?? "Analyze a few games first: the plan is built from your mistakes."}</p>
           )}

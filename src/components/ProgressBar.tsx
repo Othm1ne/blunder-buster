@@ -6,10 +6,10 @@ export function ProgressBar({ percent, label }: { percent?: number; label?: stri
   const value = known ? Math.round(Math.min(100, Math.max(0, percent))) : 0;
 
   return (
-    <div className="w-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? value : undefined}>
+    <div className="w-full min-w-0" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={known ? value : undefined}>
       {(label || known) && (
         <div className="mb-1 flex justify-between gap-2 text-sm">
-          <span className="truncate">{label}</span>
+          <span className="min-w-0 truncate">{label}</span>
           {known && <span className="font-bold tabular-nums">{value}%</span>}
         </div>
       )}
@@ -30,7 +30,7 @@ export function LoadingCard({ label = "Loading…" }: { label?: string }) {
       <div className="animate-bounce">
         <Mascot size={56} />
       </div>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         <ProgressBar label={label} />
       </div>
     </div>

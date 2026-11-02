@@ -139,7 +139,7 @@ export default function CoachPage() {
           </Link>
         </div>
       )}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <PlanCard
           stored={plan}
           state={planState}
@@ -148,7 +148,7 @@ export default function CoachPage() {
           onToggle={onToggle}
           onRegenerate={() => void writePlan(plan)}
         />
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <GoalCard goal={goal} games={games} onSave={onSaveGoal} />
           <ReportCardView games={games} reviewed={reviewed} />
         </div>

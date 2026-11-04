@@ -84,7 +84,7 @@ export type GameReview = {
  */
 export const THRESHOLDS = { inaccuracy: 5, mistake: 10, blunder: 15 };
 /** "Clearly winning" for failed-to-convert, in winning chances. */
-const WINNING = 85;
+export const WINNING = 85;
 const TIME_TROUBLE_SECONDS = 30;
 const PV_PLIES = 4;
 const MIN_MATERIAL = 2;

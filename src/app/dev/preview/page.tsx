@@ -17,6 +17,11 @@ import { ReportCardView } from "@/components/coach/ReportCardView";
 import type { RatingGoal } from "@/lib/goal";
 import { templatePlan, type StoredPlan } from "@/lib/plan";
 import { dayIndex } from "@/lib/weekly";
+import { GuessBoard } from "@/components/train/GuessBoard";
+import { NemesisCard } from "@/components/train/NemesisCard";
+import { PlayBoard } from "@/components/train/PlayBoard";
+import { ENDGAMES } from "@/lib/arena";
+import { MASTER_GAMES } from "@/lib/masters";
 
 // Dev-only page: renders the main UI pieces with a sample game (no login needed),
 // so the design can be checked in light and dark mode. Open /dev/preview while running `npm run dev`.
@@ -152,6 +157,14 @@ export default function Preview() {
           <GoalCard goal={sampleGoal} games={coachGames} onSave={async () => {}} />
           <ReportCardView games={coachGames} reviewed={coachReviewed} />
         </div>
+      </div>
+
+      <NemesisCard nemesis={{ type: "fork", theme: "fork", hits: 7, startedAt: Date.now() }} onNext={noop} />
+      <div id="train-play">
+        <PlayBoard fen={ENDGAMES[0].fen} color="w" goal={ENDGAMES[0].goal} title={ENDGAMES[0].title} tip={ENDGAMES[0].tip} onEnd={noop} />
+      </div>
+      <div id="train-guess">
+        <GuessBoard game={MASTER_GAMES[1]} onFinish={noop} />
       </div>
 
       <ProfileView profile={sampleProfile} baseline={sampleBaseline} onResetBaseline={noop} />

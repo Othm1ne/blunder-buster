@@ -21,7 +21,7 @@ export const THEMES: Record<PuzzleTheme, { name: string; prompt: string }> = {
   tactic: { name: "Tactics", prompt: "You walked into a trick here. Find the best move." },
 };
 
-const THEME_OF: Record<MistakeType, PuzzleTheme> = {
+export const THEME_OF: Record<MistakeType, PuzzleTheme> = {
   missed_mate: "mate",
   missed_material: "material",
   hung_piece: "safety",

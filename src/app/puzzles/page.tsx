@@ -30,6 +30,7 @@ import {
   type PuzzleState,
   type PuzzleTheme,
 } from "@/lib/puzzles";
+import { hitNemesis, loadTraining, NEMESIS_HP, NEMESIS_NAMES, nemesisQueue, saveNemesis, type NemesisState } from "@/lib/training";
 
 /** The blunder-check switch is a per-device preference (on by default). */
 const CHECK_KEY = "blunderCheck";
@@ -41,7 +42,7 @@ function readCheckPref(): boolean {
   }
 }
 
-// /puzzles?theme=fork opens on one theme (the weekly plan links here).
+// /puzzles?theme=fork opens on one theme (the weekly plan links here); /puzzles?nemesis=1 is the nemesis fight.
 export default function PuzzlesPage() {
   return (
     <Suspense fallback={<LoadingCard />}>
@@ -51,11 +52,14 @@ export default function PuzzlesPage() {
 }
 
 function PuzzlesFromUrl() {
-  const theme = useSearchParams().get("theme");
-  return <PuzzleGym initialTheme={theme && theme in THEMES ? (theme as PuzzleTheme) : "all"} />;
+  const params = useSearchParams();
+  const theme = params.get("theme");
+  return (
+    <PuzzleGym initialTheme={theme && theme in THEMES ? (theme as PuzzleTheme) : "all"} fight={params.get("nemesis") === "1"} />
+  );
 }
 
-function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
+function PuzzleGym({ initialTheme, fight }: { initialTheme: "all" | PuzzleTheme; fight: boolean }) {
   const { user, loading } = useAuth();
   const { results } = useAnalysis();
   const book = useOpeningBook();
@@ -64,6 +68,8 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
   const [warmup, setWarmup] = useState(0);
   const [check, setCheck] = useState(readCheckPref);
   const [checkStats, setCheckStats] = useState<BlunderCheckStats>({ asked: 0, correct: 0 });
+  const [nemesis, setNemesis] = useState<NemesisState | undefined>(undefined);
+  const [hitText, setHitText] = useState<string | null>(null);
   const [theme, setTheme] = useState<"all" | PuzzleTheme>(initialTheme);
   const [currentId, setCurrentId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,10 +77,11 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
-    Promise.all([listGames(user.uid), loadPuzzleStates(user.uid), loadWarmup(user.uid), loadBlunderCheck(user.uid)])
-      .then(([g, s, w, c]) => {
-        if (!cancelled) setCheckStats(c);
+    Promise.all([listGames(user.uid), loadPuzzleStates(user.uid), loadWarmup(user.uid), loadBlunderCheck(user.uid), loadTraining(user.uid)])
+      .then(([g, s, w, c, t]) => {
         if (cancelled) return;
+        setCheckStats(c);
+        setNemesis(t.nemesis);
         setGames(g);
         setStates(s);
         setWarmup(w);
@@ -89,8 +96,14 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
     () => (games && book !== undefined ? buildPuzzles(reviewAll(games, results, book)) : []),
     [games, results, book],
   );
-  const shown = useMemo(() => (theme === "all" ? puzzles : puzzles.filter((p) => p.theme === theme)), [puzzles, theme]);
-  const queue = useMemo(() => practiceQueue(shown, states), [shown, states]);
+  const fighting = fight && nemesis && nemesis.hits < NEMESIS_HP ? nemesis : undefined;
+  const shownTheme = fighting ? fighting.theme : theme;
+  const shown = useMemo(() => (shownTheme === "all" ? puzzles : puzzles.filter((p) => p.theme === shownTheme)), [puzzles, shownTheme]);
+  // The nemesis fight goes on after the due puzzles run out: the theme's other puzzles come back round.
+  const queue = useMemo(() => {
+    const fresh = practiceQueue(shown, states);
+    return fighting ? nemesisQueue(puzzles, fighting.theme, states, fresh) : fresh;
+  }, [shown, states, fighting, puzzles]);
   // Keep the puzzle on screen after it's done (it leaves the queue), until "Next".
   const current = puzzles.find((p) => p.id === currentId) ?? queue[0] ?? null;
 
@@ -110,6 +123,19 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
     savePuzzleState(user.uid, current.id, state).catch(() => undefined);
     saveWarmup(user.uid, done).catch(() => undefined);
     recordActivity(user.uid, { warmupDone: done === WARMUP_SIZE }).catch(() => undefined);
+
+    if (nemesis && nemesis.hits < NEMESIS_HP && current.theme === nemesis.theme) {
+      const { next, defeated } = hitNemesis(nemesis, cleanSolve);
+      setNemesis(next);
+      setHitText(
+        defeated
+          ? `${NEMESIS_NAMES[nemesis.type]} is defeated!`
+          : cleanSolve
+            ? `Hit! ${NEMESIS_NAMES[nemesis.type]} is down to ${NEMESIS_HP - next.hits} HP.`
+            : `${NEMESIS_NAMES[nemesis.type]} heals to ${NEMESIS_HP - next.hits} HP. Solve it first try to hit it!`,
+      );
+      saveNemesis(user.uid, next).catch(() => undefined);
+    }
   }
 
   function onCheck(correct: boolean) {
@@ -129,6 +155,7 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
   }
 
   function onNext() {
+    setHitText(null);
     setCurrentId(queue.find((p) => p.id !== current?.id)?.id ?? null);
   }
 
@@ -192,18 +219,20 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
         </div>
       </section>
 
-      <div className="flex flex-wrap gap-2">
-        <button className={pill(theme === "all")} onClick={() => setTheme("all")}>
-          All ({puzzles.length})
-        </button>
-        {(Object.keys(THEMES) as PuzzleTheme[])
-          .filter((t) => themeCounts.get(t))
-          .map((t) => (
-            <button key={t} className={pill(theme === t)} onClick={() => setTheme(t)}>
-              {THEMES[t].name} ({themeCounts.get(t)})
-            </button>
-          ))}
-      </div>
+      {!fighting && (
+        <div className="flex flex-wrap gap-2">
+          <button className={pill(theme === "all")} onClick={() => setTheme("all")}>
+            All ({puzzles.length})
+          </button>
+          {(Object.keys(THEMES) as PuzzleTheme[])
+            .filter((t) => themeCounts.get(t))
+            .map((t) => (
+              <button key={t} className={pill(theme === t)} onClick={() => setTheme(t)}>
+                {THEMES[t].name} ({themeCounts.get(t)})
+              </button>
+            ))}
+        </div>
+      )}
 
       <div className="card flex flex-wrap items-center gap-3 !py-2 text-sm">
         <button
@@ -222,6 +251,30 @@ function PuzzleGym({ initialTheme }: { initialTheme: "all" | PuzzleTheme }) {
             ` You've spotted it right ${Math.round((checkStats.correct / checkStats.asked) * 100)}% of the time (${checkStats.correct}/${checkStats.asked}).`}
         </span>
       </div>
+
+      {(fight || hitText) && nemesis && (
+        <section className="card flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-4xl" aria-hidden>
+              {nemesis.hits >= NEMESIS_HP ? "💀" : "👹"}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-lg">Nemesis fight: {NEMESIS_NAMES[nemesis.type]}</p>
+              <p className="text-xs text-[var(--muted)]">
+                {THEMES[nemesis.theme].name} puzzles only. First-try solves hit it, misses heal it.
+              </p>
+            </div>
+            <Link href="/train" className="text-sm underline">
+              Training
+            </Link>
+          </div>
+          <ProgressBar
+            percent={(Math.max(0, NEMESIS_HP - nemesis.hits) / NEMESIS_HP) * 100}
+            label={nemesis.hits >= NEMESIS_HP ? "Defeated!" : `${NEMESIS_HP - nemesis.hits}/${NEMESIS_HP} HP`}
+          />
+          {hitText && <p className="text-sm font-semibold">{hitText}</p>}
+        </section>
+      )}
 
       {current ? (
         <PuzzleBoard

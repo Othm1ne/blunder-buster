@@ -13,9 +13,15 @@ const NAV = [
   { href: "/", label: "Today", short: "Today", icon: "☀️" },
   { href: "/coach", label: "Coach", short: "Coach", icon: "🎯" },
   { href: "/games", label: "Games", short: "Games", icon: "♟️" },
-  { href: "/puzzles", label: "Puzzle Gym", short: "Puzzles", icon: "🧩" },
+  { href: "/train", label: "Train", short: "Train", icon: "🏋️", also: ["/puzzles"] },
   { href: "/profile", label: "Blunder Profile", short: "Profile", icon: "📊" },
 ];
+
+/** A tab stays lit on its sub-pages (/train/boss) and related pages (the Puzzle Gym is part of Train). */
+function isActive(item: (typeof NAV)[number], pathname: string): boolean {
+  if (item.href === "/") return pathname === "/";
+  return [item.href, ...(item.also ?? [])].some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -42,7 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 key={item.href}
                 href={item.href}
                 className={`rounded-full px-3 py-1 text-sm font-semibold ${
-                  pathname === item.href ? "bg-[var(--gold)] text-[var(--on-gold)]" : "hover:bg-[var(--wood-dark)]/30"
+                  isActive(item, pathname) ? "bg-[var(--gold)] text-[var(--on-gold)]" : "hover:bg-[var(--wood-dark)]/30"
                 }`}
               >
                 {item.label}
@@ -74,7 +80,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="mx-auto w-full max-w-5xl flex-1 px-3 pt-4 pb-24 sm:px-4 sm:pt-6 sm:pb-6">{children}</main>
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t-2 border-[var(--line)] bg-[var(--header)] pb-[env(safe-area-inset-bottom)] text-[var(--on-header)] sm:hidden">
         {NAV.map((item) => {
-          const active = pathname === item.href;
+          const active = isActive(item, pathname);
           return (
             <Link
               key={item.href}

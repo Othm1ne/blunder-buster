@@ -7,6 +7,7 @@ import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
 import { LoadingCard } from "@/components/ProgressBar";
 import { ProfileView } from "@/components/profile/ProfileView";
+import { SkillRadar } from "@/components/profile/SkillRadar";
 import type { GameDoc } from "@/lib/analysis";
 import type { TimeClass } from "@/lib/chesscom";
 import { getProfile, listGames, saveBaseline, type Baseline } from "@/lib/games";
@@ -119,7 +120,10 @@ export default function ProfilePage() {
       {reviewed.length === 0 ? (
         <p className="card text-sm">No analyzed {filter} games yet.</p>
       ) : (
-        <ProfileView profile={profile} baseline={baseline} onResetBaseline={resetBaseline} />
+        <>
+          <SkillRadar reviewed={reviewed} />
+          <ProfileView profile={profile} baseline={baseline} onResetBaseline={resetBaseline} />
+        </>
       )}
     </div>
   );

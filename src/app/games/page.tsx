@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
@@ -10,6 +10,9 @@ import { isAnalyzed, type GameDoc } from "@/lib/analysis";
 import { GameRow } from "@/components/GameRow";
 import { TiltWarning } from "@/components/TiltWarning";
 import { getProfile, listGames, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
+import { REACT_MAX_GAMES, SyncReactions } from "@/components/SyncReactions";
+import { useOpeningBook } from "@/lib/openings";
+import { reviewCached, type ReviewedGame } from "@/lib/profile";
 
 type Filter = "all" | TimeClass;
 
@@ -28,13 +31,26 @@ export default function GamesPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
+  /** Games the last sync brought in, for Sir Blunderbuss's reactions. */
+  const [fresh, setFresh] = useState<GameDoc[] | null>(null);
   const analysis = useAnalysis();
+  const book = useOpeningBook();
 
   const load = useCallback(async (uid: string) => {
     const [p, g] = await Promise.all([getProfile(uid), listGames(uid)]);
     setProfile(p);
     setGames(g);
+    return g;
   }, []);
+
+  const { enqueue: enqueueGames, results: liveResults } = analysis;
+  const freshReviewed = useMemo<ReviewedGame[]>(() => {
+    if (!fresh || book === undefined) return [];
+    return fresh.flatMap((g) => {
+      const a = g.analysis ?? liveResults.get(g.id);
+      return a && isAnalyzed({ ...g, analysis: a }) ? [{ game: g, analysis: a, review: reviewCached(g, a, book) }] : [];
+    });
+  }, [fresh, liveResults, book]);
 
   useEffect(() => {
     if (!user) return;
@@ -57,17 +73,22 @@ export default function GamesPage() {
     setError(null);
     setStatus(null);
     try {
+      const before = new Set(games.map((g) => g.id));
       const added = await syncGames(user.uid, setProgress);
       setProgress({ message: "Refreshing your game list…", percent: 100 });
-      await load(user.uid);
-      setStatus(added ? `Imported ${added} new game${added === 1 ? "" : "s"}!` : "No new games. Go play one!");
+      const all = await load(user.uid);
+      const newGames = all.filter((g) => !before.has(g.id)).sort((a, b) => b.endTime - a.endTime);
+      if (newGames.length <= REACT_MAX_GAMES) {
+        setFresh(newGames);
+        enqueueGames(newGames, { first: true });
+      } else setStatus(`Imported ${added} new games!`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setProgress(null);
       setBusy(false);
     }
-  }, [user, load]);
+  }, [user, load, games, enqueueGames]);
 
   async function onSaveUsername(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -149,6 +170,8 @@ export default function GamesPage() {
         {status && <p className="w-full text-sm">{status}</p>}
         {error && <p className="w-full text-sm text-[var(--bad)]">{error}</p>}
       </section>
+
+      {fresh && !progress && <SyncReactions games={fresh} reviewed={freshReviewed} onClose={() => setFresh(null)} />}
 
       <TiltWarning games={games} />
 

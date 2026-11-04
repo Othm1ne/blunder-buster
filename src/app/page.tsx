@@ -16,8 +16,10 @@ import { DayAction } from "@/components/coach/PlanCard";
 import { goalProgress, type RatingGoal } from "@/lib/goal";
 import { loadPlan, type StoredPlan } from "@/lib/plan";
 import { dayIndex, weekKey, weekStart } from "@/lib/weekly";
-import { computeProgress, XP, type ActivityDoc } from "@/lib/progress";
+import { computeProgress, FREEZE_EVERY, MAX_FREEZES, XP, yesterday, type ActivityDoc } from "@/lib/progress";
 import { loadPuzzleStates, today, WARMUP_SIZE, type PuzzleState } from "@/lib/puzzles";
+import { loadTraining, type TrainingDoc } from "@/lib/training";
+import { REACT_MAX_GAMES, SyncReactions } from "@/components/SyncReactions";
 
 const PLAY_URL = "https://www.chess.com/play/online/new";
 
@@ -28,6 +30,7 @@ type Data = {
   username?: string;
   goal?: RatingGoal;
   plan: StoredPlan | null;
+  training: TrainingDoc;
 };
 
 function Mission({
@@ -64,20 +67,23 @@ function Mission({
 
 export default function Today() {
   const { user, loading, signIn } = useAuth();
-  const { results } = useAnalysis();
+  const { results, enqueue } = useAnalysis();
   const book = useOpeningBook();
   const [data, setData] = useState<Data | null>(null);
+  /** Games the last sync brought in (null = no sync yet this visit). */
+  const [fresh, setFresh] = useState<GameDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncProgress | null>(null);
 
   const load = useCallback(async (uid: string): Promise<Data> => {
-    const [games, states, profile, plan] = await Promise.all([
+    const [games, states, profile, plan, training] = await Promise.all([
       listGames(uid),
       loadPuzzleStates(uid),
       getProfile(uid),
       loadPlan(uid, weekKey(weekStart())),
+      loadTraining(uid),
     ]);
-    return { games, states, activity: profile as ActivityDoc, username: profile.chessComUsername, goal: profile.goal, plan };
+    return { games, states, activity: profile as ActivityDoc, username: profile.chessComUsername, goal: profile.goal, plan, training };
   }, []);
 
   useEffect(() => {
@@ -93,7 +99,13 @@ export default function Today() {
 
   const reviewed = useMemo(() => (data && book !== undefined ? reviewAll(data.games, results, book) : null), [data, results, book]);
   const progress = useMemo(
-    () => (data && reviewed ? computeProgress(data.games, reviewed, data.states, data.activity) : null),
+    () =>
+      data && reviewed
+        ? computeProgress(data.games, reviewed, data.states, data.activity, {
+            training: data.training,
+            goalReached: !!data.goal && goalProgress(data.goal, data.games).reached,
+          })
+        : null,
     [data, reviewed],
   );
 
@@ -101,8 +113,16 @@ export default function Today() {
     if (!user) return;
     setError(null);
     try {
+      const before = new Set(data?.games.map((g) => g.id));
       await syncGames(user.uid, setSync);
-      setData(await load(user.uid));
+      const next = await load(user.uid);
+      setData(next);
+      // Sir Blunderbuss reacts to each new game, and analyzes them straight away for the full verdict.
+      const added = next.games.filter((g) => !before.has(g.id)).sort((a, b) => b.endTime - a.endTime);
+      if (added.length <= REACT_MAX_GAMES) {
+        setFresh(added);
+        enqueue(added, { first: true });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -137,12 +157,16 @@ export default function Today() {
   const missionsDone = [warmupDone >= WARMUP_SIZE, rapidToday.length > 0, reviewedToday].filter(Boolean).length;
   const { streak, level } = progress;
 
+  const savedByFreeze = streak.frozenDays.at(-1) === yesterday() && !streak.activeToday;
+
   const mood: MascotMood = missionsDone === 3 ? "proud" : streak.current > 0 && !streak.activeToday ? "shocked" : "happy";
   const line =
     missionsDone === 3
       ? "All missions done today. Sir Blunderbuss is proud of you!"
-      : streak.current > 0 && !streak.activeToday
-        ? `Your ${streak.current}-day streak is in danger! Do one puzzle to keep it alive.`
+      : savedByFreeze
+        ? `A streak freeze ❄️ saved your ${streak.current}-day streak yesterday! Train today to keep it going.`
+        : streak.current > 0 && !streak.activeToday
+          ? `Your ${streak.current}-day streak is in danger! Do one puzzle to keep it alive.`
         : "Before every move, ask: is everything safe?";
 
   return (
@@ -177,6 +201,12 @@ export default function Today() {
             </span>
             <span className="font-display text-2xl tabular-nums">{streak.current}</span>
             <span className="text-xs text-[var(--muted)]">day streak</span>
+            <span
+              className="mt-1 text-xs font-semibold"
+              title={`Streak freezes: you earn one every ${FREEZE_EVERY} active days (up to ${MAX_FREEZES}). A missed day uses one instead of breaking your streak.`}
+            >
+              {streak.freezes ? `${"❄️".repeat(streak.freezes)} freeze${streak.freezes > 1 ? "s" : ""}` : "no freeze"}
+            </span>
           </div>
           <div className="card flex min-w-24 flex-col items-center !p-3 text-center">
             <span className="text-3xl" aria-hidden>
@@ -242,6 +272,11 @@ export default function Today() {
             <ProgressBar percent={sync.percent} label={sync.message} />
           </div>
         )}
+        {fresh && !sync && (
+          <div className="mt-3">
+            <SyncReactions games={fresh} reviewed={reviewed} onClose={() => setFresh(null)} />
+          </div>
+        )}
         {error && <p className="mt-2 text-sm text-[var(--bad)]">{error}</p>}
       </section>
 
@@ -272,7 +307,9 @@ export default function Today() {
 
       <p className="text-center text-xs text-[var(--muted)]">
         XP: puzzle solved +{XP.puzzleSolved}, puzzle tried +{XP.puzzleTried}, game reviewed +{XP.review}, clean game +
-        {XP.cleanGame}, warm-up +{XP.warmup}, each active day +{XP.activeDay}.
+        {XP.cleanGame}, warm-up +{XP.warmup}, each active day +{XP.activeDay}, endgame star +{XP.endgameStar}, master game +
+        {XP.masterGame}, boss beaten +{XP.bossBeaten}, nemesis beaten +{XP.nemesisBeaten}. Every {FREEZE_EVERY} active days
+        earn a streak freeze ❄️ (hold up to {MAX_FREEZES}): it covers a missed day so your streak survives.
       </p>
     </div>
   );

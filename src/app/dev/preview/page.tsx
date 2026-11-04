@@ -22,6 +22,8 @@ import { NemesisCard } from "@/components/train/NemesisCard";
 import { PlayBoard } from "@/components/train/PlayBoard";
 import { ENDGAMES } from "@/lib/arena";
 import { MASTER_GAMES } from "@/lib/masters";
+import { SkillRadar } from "@/components/profile/SkillRadar";
+import { SyncReactions } from "@/components/SyncReactions";
 
 // Dev-only page: renders the main UI pieces with a sample game (no login needed),
 // so the design can be checked in light and dark mode. Open /dev/preview while running `npm run dev`.
@@ -159,7 +161,12 @@ export default function Preview() {
         </div>
       </div>
 
-      <NemesisCard nemesis={{ type: "fork", theme: "fork", hits: 7, startedAt: Date.now() }} onNext={noop} />
+      <div id="fun">
+        <SyncReactions games={coachGames.slice(-3).reverse()} reviewed={coachReviewed.slice(-2)} onClose={noop} />
+      </div>
+      <SkillRadar reviewed={coachReviewed} />
+
+      <NemesisCard nemesis={{ type: "fork", theme: "fork", hits: 7, startedAt: 0 }} onNext={noop} />
       <div id="train-play">
         <PlayBoard fen={ENDGAMES[0].fen} color="w" goal={ENDGAMES[0].goal} title={ENDGAMES[0].title} tip={ENDGAMES[0].tip} onEnd={noop} />
       </div>

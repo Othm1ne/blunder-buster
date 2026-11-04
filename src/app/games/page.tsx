@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
-import { playerExists, type TimeClass } from "@/lib/chesscom";
+import { playerExists, SITE_NAME, type Site, type TimeClass } from "@/lib/chesscom";
+import { lichessPlayerExists } from "@/lib/lichess";
 import { isAnalyzed, type GameDoc } from "@/lib/analysis";
 import { GameRow } from "@/components/GameRow";
 import { TiltWarning } from "@/components/TiltWarning";
-import { getProfile, listGames, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
+import { claimAutoSync, getProfile, hasSource, listGames, saveLichessUsername, saveUsername, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
 import { REACT_MAX_GAMES, SyncReactions } from "@/components/SyncReactions";
 import { useOpeningBook } from "@/lib/openings";
 import { reviewCached, type ReviewedGame } from "@/lib/profile";
@@ -30,11 +31,14 @@ export default function GamesPage() {
   const [progress, setProgress] = useState<SyncProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [editing, setEditing] = useState(false);
+  /** Which username form is open. */
+  const [editing, setEditing] = useState<Site | null>(null);
   /** Games the last sync brought in, for Sir Blunderbuss's reactions. */
   const [fresh, setFresh] = useState<GameDoc[] | null>(null);
   const analysis = useAnalysis();
   const book = useOpeningBook();
+  /** The latest sync(), for the auto-sync when the page first loads. */
+  const autoSync = useRef<((known: GameDoc[]) => void) | null>(null);
 
   const load = useCallback(async (uid: string) => {
     const [p, g] = await Promise.all([getProfile(uid), listGames(uid)]);
@@ -60,6 +64,8 @@ export default function GamesPage() {
         if (cancelled) return;
         setProfile(p);
         setGames(g);
+        // Opening the app pulls in the games you played since last time.
+        if (claimAutoSync(p)) autoSync.current?.(g);
       })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -67,13 +73,13 @@ export default function GamesPage() {
     };
   }, [user]);
 
-  const sync = useCallback(async () => {
+  const sync = useCallback(async (known: GameDoc[] = games) => {
     if (!user) return;
     setBusy(true);
     setError(null);
     setStatus(null);
     try {
-      const before = new Set(games.map((g) => g.id));
+      const before = new Set(known.map((g) => g.id));
       const added = await syncGames(user.uid, setProgress);
       setProgress({ message: "Refreshing your game list…", percent: 100 });
       const all = await load(user.uid);
@@ -89,8 +95,11 @@ export default function GamesPage() {
       setBusy(false);
     }
   }, [user, load, games, enqueueGames]);
+  useEffect(() => {
+    autoSync.current = sync;
+  }, [sync]);
 
-  async function onSaveUsername(e: FormEvent<HTMLFormElement>) {
+  async function onSaveUsername(e: FormEvent<HTMLFormElement>, site: Site) {
     e.preventDefault();
     if (!user) return;
     const username = String(new FormData(e.currentTarget).get("username") ?? "").trim();
@@ -98,15 +107,22 @@ export default function GamesPage() {
     setBusy(true);
     setError(null);
     try {
-      if (!(await playerExists(username))) throw new Error(`No Chess.com player called "${username}".`);
-      await saveUsername(user.uid, username);
-      setEditing(false);
+      const exists = site === "lichess" ? lichessPlayerExists : playerExists;
+      if (!(await exists(username))) throw new Error(`No ${SITE_NAME[site]} player called "${username}".`);
+      await (site === "lichess" ? saveLichessUsername : saveUsername)(user.uid, username);
+      setEditing(null);
       await load(user.uid);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function removeLichess() {
+    if (!user) return;
+    await saveLichessUsername(user.uid, null);
+    await load(user.uid);
   }
 
   if (loading) return <LoadingCard />;
@@ -134,37 +150,60 @@ export default function GamesPage() {
   return (
     <div className="flex flex-col gap-5">
       <section className="card flex flex-wrap items-center gap-3">
-        {username && !editing ? (
+        {hasSource(profile) && !editing ? (
           <>
-            <div>
+            <div className="min-w-0">
               <h1 className="font-display text-2xl">Your games</h1>
               <p className="text-sm text-[var(--muted)]">
-                Chess.com: <strong>{username}</strong>{" "}
-                <button className="underline" onClick={() => setEditing(true)}>
-                  change
-                </button>
+                {username && (
+                  <>
+                    Chess.com: <strong>{username}</strong>{" "}
+                    <button className="underline" onClick={() => setEditing("chesscom")}>
+                      change
+                    </button>
+                    {" · "}
+                  </>
+                )}
+                {profile.lichessUsername ? (
+                  <>
+                    Lichess: <strong>{profile.lichessUsername}</strong>{" "}
+                    <button className="underline" onClick={() => setEditing("lichess")}>
+                      change
+                    </button>{" "}
+                    {username && (
+                      <button className="underline" onClick={removeLichess}>
+                        remove
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <button className="underline" onClick={() => setEditing("lichess")}>
+                    + also import from Lichess
+                  </button>
+                )}
+                {!username && (
+                  <>
+                    {" · "}
+                    <button className="underline" onClick={() => setEditing("chesscom")}>
+                      + also import from Chess.com
+                    </button>
+                  </>
+                )}
               </p>
             </div>
-            <button className="btn-primary ml-auto" onClick={sync} disabled={busy}>
+            <button className="btn-primary ml-auto" onClick={() => sync()} disabled={busy}>
               {busy ? "Syncing…" : "Sync new games"}
             </button>
           </>
         ) : (
-          <form onSubmit={onSaveUsername} className="flex flex-wrap items-center gap-3 w-full">
-            <label className="font-display text-xl" htmlFor="username">
-              Your Chess.com username
-            </label>
-            <input
-              id="username"
-              name="username"
-              defaultValue={username}
-              autoComplete="off"
-              className="flex-1 min-w-40 rounded-full border-2 border-[var(--line)] bg-[var(--paper)] px-4 py-1 outline-none focus:border-[var(--gold)]"
-            />
-            <button className="btn-primary" disabled={busy}>
-              Save
-            </button>
-          </form>
+          <UsernameForm
+            site={editing ?? "chesscom"}
+            current={editing === "lichess" ? profile.lichessUsername : username}
+            busy={busy}
+            onSubmit={onSaveUsername}
+            onSwitch={!hasSource(profile) ? (site) => setEditing(site) : undefined}
+            onCancel={hasSource(profile) ? () => setEditing(null) : undefined}
+          />
         )}
         {progress && <ProgressBar percent={progress.percent} label={progress.message} />}
         {status && <p className="w-full text-sm">{status}</p>}
@@ -175,7 +214,7 @@ export default function GamesPage() {
 
       <TiltWarning games={games} />
 
-      {username && games.length > 0 && (
+      {hasSource(profile) && games.length > 0 && (
         <section className="card flex flex-wrap items-center gap-3">
           <Mascot mood={run ? "happy" : pending.length ? "shocked" : "proud"} size={56} />
           {run ? (
@@ -216,7 +255,7 @@ export default function GamesPage() {
         </section>
       )}
 
-      {username && (
+      {hasSource(profile) && (
         <>
           <div className="flex flex-wrap items-center gap-2">
             {(["all", "rapid", "blitz"] as const).map((f) => (
@@ -258,5 +297,58 @@ export default function GamesPage() {
         </>
       )}
     </div>
+  );
+}
+
+function UsernameForm({
+  site,
+  current,
+  busy,
+  onSubmit,
+  onSwitch,
+  onCancel,
+}: {
+  site: Site;
+  current?: string;
+  busy: boolean;
+  onSubmit: (e: FormEvent<HTMLFormElement>, site: Site) => void;
+  /** First setup: pick the other site instead. */
+  onSwitch?: (site: Site) => void;
+  onCancel?: () => void;
+}) {
+  const other: Site = site === "lichess" ? "chesscom" : "lichess";
+  return (
+    <form key={site} onSubmit={(e) => onSubmit(e, site)} className="flex w-full flex-wrap items-center gap-3">
+      <label className="font-display text-xl" htmlFor="username">
+        Your {SITE_NAME[site]} username
+      </label>
+      <input
+        id="username"
+        name="username"
+        defaultValue={current}
+        autoComplete="off"
+        autoCapitalize="none"
+        className="min-w-40 flex-1 rounded-full border-2 border-[var(--line)] bg-[var(--paper)] px-4 py-1 outline-none focus:border-[var(--gold)]"
+      />
+      <button className="btn-primary" disabled={busy}>
+        Save
+      </button>
+      {onCancel && (
+        <button type="button" className="text-sm underline" onClick={onCancel}>
+          Cancel
+        </button>
+      )}
+      {onSwitch && (
+        <button type="button" className="w-full text-left text-sm underline" onClick={() => onSwitch(other)}>
+          I play on {SITE_NAME[other]} instead
+        </button>
+      )}
+      {site === "lichess" && (
+        <p className="w-full text-xs text-[var(--muted)]">
+          Your rapid and blitz games from the last 3 months (up to 500). Rating goals keep using{" "}
+          {onSwitch ? "Lichess" : "Chess.com"} ratings, so the two don&apos;t get mixed.
+        </p>
+      )}
+    </form>
   );
 }

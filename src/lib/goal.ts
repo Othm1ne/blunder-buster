@@ -1,10 +1,10 @@
 import { deleteField, doc, setDoc } from "firebase/firestore";
 import { db } from "./firebase";
 import type { GameDoc } from "./analysis";
-import type { TimeClass } from "./chesscom";
+import { onRatingSite, type TimeClass } from "./chesscom";
 
 // Rating goal mode: "get from 600 to 900 in rapid". Stored on the user document; progress is
-// derived from the ratings Chess.com recorded on your imported games.
+// derived from the ratings Chess.com (or Lichess) recorded on your imported games.
 
 export type RatingGoal = {
   timeClass: TimeClass;
@@ -24,7 +24,7 @@ const PACE_MIN_GAMES = 5;
 
 /** Your rating after each game of that time control, oldest first. */
 export function ratingHistory(games: GameDoc[], timeClass: TimeClass): { endTime: number; rating: number }[] {
-  return games
+  return onRatingSite(games)
     .filter((g) => g.timeClass === timeClass && g.myRating > 0)
     .map((g) => ({ endTime: g.endTime, rating: g.myRating }))
     .sort((a, b) => a.endTime - b.endTime);

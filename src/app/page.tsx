@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useAnalysis } from "@/components/AnalysisProvider";
 import { Mascot, type MascotMood } from "@/components/Mascot";
 import { LoadingCard, ProgressBar } from "@/components/ProgressBar";
 import type { GameDoc } from "@/lib/analysis";
-import { getProfile, listGames, syncGames, type SyncProgress } from "@/lib/games";
+import { claimAutoSync, getProfile, hasSource, listGames, syncGames, type SyncProgress, type UserProfile } from "@/lib/games";
 import { useOpeningBook } from "@/lib/openings";
 import { reviewAll } from "@/lib/profile";
 import { tiltStats } from "@/lib/insights";
@@ -21,13 +21,16 @@ import { loadPuzzleStates, today, WARMUP_SIZE, type PuzzleState } from "@/lib/pu
 import { loadTraining, type TrainingDoc } from "@/lib/training";
 import { REACT_MAX_GAMES, SyncReactions } from "@/components/SyncReactions";
 
-const PLAY_URL = "https://www.chess.com/play/online/new";
+const PLAY = {
+  chesscom: { url: "https://www.chess.com/play/online/new", name: "Chess.com" },
+  lichess: { url: "https://lichess.org/#hook", name: "Lichess" },
+};
 
 type Data = {
   games: GameDoc[];
   states: Map<string, PuzzleState>;
   activity: ActivityDoc;
-  username?: string;
+  profile: UserProfile;
   goal?: RatingGoal;
   plan: StoredPlan | null;
   training: TrainingDoc;
@@ -74,6 +77,8 @@ export default function Today() {
   const [fresh, setFresh] = useState<GameDoc[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sync, setSync] = useState<SyncProgress | null>(null);
+  /** The latest syncNow(), for the auto-sync when the app opens. */
+  const autoSync = useRef<((known: GameDoc[]) => void) | null>(null);
 
   const load = useCallback(async (uid: string): Promise<Data> => {
     const [games, states, profile, plan, training] = await Promise.all([
@@ -83,14 +88,19 @@ export default function Today() {
       loadPlan(uid, weekKey(weekStart())),
       loadTraining(uid),
     ]);
-    return { games, states, activity: profile as ActivityDoc, username: profile.chessComUsername, goal: profile.goal, plan, training };
+    return { games, states, activity: profile as ActivityDoc, profile, goal: profile.goal, plan, training };
   }, []);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
     load(user.uid)
-      .then((d) => !cancelled && setData(d))
+      .then((d) => {
+        if (cancelled) return;
+        setData(d);
+        // Opening the app pulls in the games you played since last time (reactions included).
+        if (claimAutoSync(d.profile)) autoSync.current?.(d.games);
+      })
       .catch((e) => !cancelled && setError(e instanceof Error ? e.message : String(e)));
     return () => {
       cancelled = true;
@@ -109,11 +119,11 @@ export default function Today() {
     [data, reviewed],
   );
 
-  async function syncNow() {
+  async function syncNow(known = data?.games ?? []) {
     if (!user) return;
     setError(null);
     try {
-      const before = new Set(data?.games.map((g) => g.id));
+      const before = new Set(known.map((g) => g.id));
       await syncGames(user.uid, setSync);
       const next = await load(user.uid);
       setData(next);
@@ -130,6 +140,10 @@ export default function Today() {
     }
   }
 
+  useEffect(() => {
+    autoSync.current = syncNow;
+  });
+
   if (loading) return <LoadingCard />;
   if (!user)
     return (
@@ -137,7 +151,7 @@ export default function Today() {
         <Mascot size={120} />
         <h1 className="font-display text-3xl">Welcome to Blunder Buster!</h1>
         <p className="max-w-md text-[var(--muted)]">
-          Sir Blunderbuss reviews your Chess.com games, finds your blunders, and turns them into puzzles so you stop
+          Sir Blunderbuss reviews your Chess.com or Lichess games, finds your blunders, and turns them into puzzles so you stop
           making them.
         </p>
         <button className="btn-primary" onClick={signIn}>
@@ -156,6 +170,7 @@ export default function Today() {
   const toReview = (rapidToday[0] ?? todaysGames[0]) as GameDoc | undefined;
   const missionsDone = [warmupDone >= WARMUP_SIZE, rapidToday.length > 0, reviewedToday].filter(Boolean).length;
   const { streak, level } = progress;
+  const play = PLAY[!data.profile.chessComUsername && data.profile.lichessUsername ? "lichess" : "chesscom"];
 
   const savedByFreeze = streak.frozenDays.at(-1) === yesterday() && !streak.activeToday;
 
@@ -171,9 +186,9 @@ export default function Today() {
 
   return (
     <div className="flex flex-col gap-5">
-      {!data.username && (
+      {!hasSource(data.profile) && (
         <div className="card flex flex-wrap items-center gap-3">
-          <p className="flex-1">First, tell me your Chess.com username so I can import your games.</p>
+          <p className="flex-1">First, tell me your Chess.com or Lichess username so I can import your games.</p>
           <Link href="/games" className="btn-primary">
             Set up
           </Link>
@@ -238,13 +253,13 @@ export default function Today() {
           <Mission
             done={rapidToday.length > 0}
             title="Play"
-            detail="Play 1 rapid game (10+5 or 15+10) on Chess.com. Slower games = fewer blunders."
+            detail={`Play 1 rapid game (10+5 or 15+10) on ${play.name}. Slower games = fewer blunders.`}
             reward={`+${XP.cleanGame} XP if clean`}
           >
-            <a href={PLAY_URL} target="_blank" rel="noreferrer" className="btn-primary text-sm">
-              Play on Chess.com
+            <a href={play.url} target="_blank" rel="noreferrer" className="btn-primary text-sm">
+              Play on {play.name}
             </a>
-            <button className="btn-secondary text-sm" onClick={syncNow} disabled={!!sync || !data.username}>
+            <button className="btn-secondary text-sm" onClick={() => syncNow()} disabled={!!sync || !hasSource(data.profile)}>
               I played: sync
             </button>
           </Mission>

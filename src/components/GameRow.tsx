@@ -8,6 +8,7 @@ import { useOpeningBook } from "@/lib/openings";
 import { reviewCached } from "@/lib/profile";
 import { explain, LABEL_STYLE, MISTAKE_NAMES, moveName } from "@/lib/describe";
 import { mascotLine } from "@/lib/templates";
+import { siteOf } from "@/lib/chesscom";
 
 const RESULT_STYLE = {
   win: { label: "W", color: "#2f9447" },
@@ -108,7 +109,7 @@ export function GameRow({
             <AnalysisBadge queued={queued} percent={percent} onAnalyze={onAnalyze} />
           )}
           <a href={g.url} target="_blank" rel="noreferrer" className="hidden text-xs underline shrink-0 sm:inline">
-            chess.com
+            {siteOf(g) === "lichess" ? "lichess" : "chess.com"}
           </a>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import type { GameDoc } from "./analysis";
-import type { TimeClass } from "./chesscom";
+import { onRatingSite, type TimeClass } from "./chesscom";
 import type { MistakeType } from "./classify";
 import type { ReviewedGame } from "./profile";
 
@@ -58,7 +58,7 @@ export function weekStats(games: GameDoc[], reviewed: ReviewedGame[], start: num
 
   const ratingChange: WeekStats["ratingChange"] = {};
   for (const tc of ["rapid", "blitz"] as const) {
-    const history = games.filter((g) => g.timeClass === tc).sort((a, b) => a.endTime - b.endTime);
+    const history = onRatingSite(games).filter((g) => g.timeClass === tc).sort((a, b) => a.endTime - b.endTime);
     const during = history.filter((g) => inWeek(g.endTime));
     if (!during.length) continue;
     const before = history.filter((g) => g.endTime < start).at(-1)?.myRating ?? during[0].myRating;

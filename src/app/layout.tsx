@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 import { AppShell } from "@/components/AppShell";
 import { AnalysisProvider } from "@/components/AnalysisProvider";
+import { ServiceWorker } from "@/components/ServiceWorker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,6 +20,10 @@ const fredoka = Fredoka({
 export const metadata: Metadata = {
   title: "Blunder Buster",
   description: "Your fun chess coach that hunts down your blunders.",
+  applicationName: "Blunder Buster",
+  // iPhone "Add to Home Screen" (iOS ignores most of the web manifest).
+  appleWebApp: { capable: true, title: "Blunder Buster", statusBarStyle: "default" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
 };
 
 export const viewport: Viewport = {
@@ -36,6 +41,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${geistSans.variable} ${fredoka.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
+        <ServiceWorker />
         <AuthProvider>
           <AnalysisProvider>
             <AppShell>{children}</AppShell>

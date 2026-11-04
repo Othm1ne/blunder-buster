@@ -8,6 +8,7 @@ import { Mascot } from "./Mascot";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { useAnalysis } from "./AnalysisProvider";
 import { ProgressBar } from "./ProgressBar";
+import { useInstallPrompt, useOnline } from "./ServiceWorker";
 
 const NAV = [
   { href: "/", label: "Today", short: "Today", icon: "☀️" },
@@ -27,6 +28,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user, loading, signIn, logOut } = useAuth();
   const { run } = useAnalysis();
+  const online = useOnline();
+  const install = useInstallPrompt();
 
   return (
     <div className="min-h-full flex flex-col">
@@ -55,7 +58,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="ml-auto shrink-0">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            {install && (
+              <button onClick={install} className="btn-secondary !px-3 !py-1 text-sm" title="Install Blunder Buster as an app">
+                Install<span className="hidden sm:inline"> app</span>
+              </button>
+            )}
             {!isFirebaseConfigured ? (
               <span className="text-xs">Firebase not configured</span>
             ) : loading ? null : user ? (
@@ -70,6 +78,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
+      {!online && (
+        <div className="border-b-2 border-[var(--line)] bg-[var(--stripe)] text-sm" role="status">
+          <p className="mx-auto max-w-5xl px-3 py-1.5 sm:px-4">
+            📴 You&apos;re offline. Puzzles, training and reviews still work, and your progress saves when you&apos;re back.
+          </p>
+        </div>
+      )}
       {run && pathname !== "/games" && (
         <Link href="/games" className="block border-b-2 border-[var(--line)] bg-[var(--card)]">
           <div className="mx-auto max-w-5xl px-3 py-2 sm:px-4">

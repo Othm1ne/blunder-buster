@@ -20,6 +20,8 @@ export type ChessComGame = {
 };
 
 export type TimeClass = "rapid" | "blitz";
+/** Where a game was played. Games from before the Lichess import have no `site`: Chess.com. */
+export type Site = "chesscom" | "lichess";
 export type GameResult = "win" | "loss" | "draw";
 
 export type StoredGame = {
@@ -38,7 +40,20 @@ export type StoredGame = {
   opening: string;
   moves: string[]; // SAN, from the start position
   clocks: number[]; // seconds left after each move (same length as moves when available)
+  site?: Site;
 };
+
+export const siteOf = (g: { site?: Site }): Site => g.site ?? "chesscom";
+export const SITE_NAME: Record<Site, string> = { chesscom: "Chess.com", lichess: "Lichess" };
+
+/**
+ * Chess.com and Lichess ratings aren't comparable, so rating features (goal, weekly change, baseline)
+ * use one site: Chess.com when you have games there, else Lichess.
+ */
+export function onRatingSite<G extends { site?: Site }>(games: G[]): G[] {
+  const site: Site = games.some((g) => siteOf(g) === "chesscom") ? "chesscom" : "lichess";
+  return games.filter((g) => siteOf(g) === site);
+}
 
 const DRAW_CODES = new Set(["agreed", "repetition", "stalemate", "insufficient", "50move", "timevsinsufficient"]);
 export const IMPORTED_TIME_CLASSES: TimeClass[] = ["rapid", "blitz"];
@@ -69,7 +84,7 @@ export function archiveLabel(url: string): string {
   return new Date(Number(year), Number(month) - 1).toLocaleString("en", { month: "short", year: "numeric" });
 }
 
-function parseClocks(pgn: string): number[] {
+export function parseClocks(pgn: string): number[] {
   return [...pgn.matchAll(/\[%clk (\d+):(\d+):(\d+(?:\.\d+)?)\]/g)].map(
     ([, h, m, s]) => Number(h) * 3600 + Number(m) * 60 + Number(s),
   );

@@ -1,4 +1,5 @@
 import type { GameDoc, GameAnalysis } from "./analysis";
+import { onRatingSite } from "./chesscom";
 import { reviewGame, type GameReview, type MistakeType, type MoveReview, type OpeningBook } from "./classify";
 import type { Baseline } from "./games";
 import { habitStats, tiltStats, timeStats, type HabitStats, type TiltStats, type TimeStats } from "./insights";
@@ -151,8 +152,9 @@ export function buildProfile(reviewed: ReviewedGame[]): Profile {
 
 /** Snapshot for the baseline. Ratings are the latest per time control. */
 export function baselineFrom(profile: Profile, reviewed: ReviewedGame[]): Baseline {
+  const rated = onRatingSite(reviewed.map((r) => r.game));
   const latest = (tc: string) =>
-    reviewed.filter((r) => r.game.timeClass === tc).sort((a, b) => b.game.endTime - a.game.endTime)[0]?.game.myRating;
+    rated.filter((g) => g.timeClass === tc).sort((a, b) => b.endTime - a.endTime)[0]?.myRating;
   const baseline: Baseline = {
     createdAt: Date.now(),
     blundersPerGame: Math.round(profile.blundersPerGame * 100) / 100,
